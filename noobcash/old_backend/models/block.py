@@ -21,6 +21,7 @@ class Block(models.Model):
     current_hash = models.TextField(null=False)
     previous_hash = models.TextField(null=False)
 
+
     # what we send
     def dump_sendable(self):
         return json.dumps(dict(

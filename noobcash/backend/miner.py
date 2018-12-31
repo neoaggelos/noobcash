@@ -7,11 +7,6 @@ from random import seed, randint
 from subprocess import Popen
 from signal import SIGTERM
 from Crypto.Hash import SHA384
-
-from noobcash.backend.models import NodeInfo, Transaction, Node, Block, KeyPair
-from noobcash.backend import settings
-
-
 ################################################################################
 
 # Set up django
@@ -22,36 +17,34 @@ django.setup()
 
 ################################################################################
 
+from noobcash.backend import settings, state
+
 # dumb starter
-def start(block):
+def _start(block):
     try:
-        node = NodeInfo.objects.get()
         proc = Popen(['python', __file__, block])
-        node.miner_pid = proc.pid
-        node.save()
+        state.miner_pid = proc.pid
 
     except Exception as e:
-        print(f'start_miner: {e.__class__.__name__}: {e}')
+        print(f'miner.start: {e.__class__.__name__}: {e}')
 
 
-def start_if_not_running(block):
+def start(block):
     try:
-        node = NodeInfo.objects.get()
-        os.kill(node.miner_pid, 0)
+        os.kill(state.miner_pid, 0)
 
     except:
-        start(block)
+        _start(block)
 
 
 def stop():
     try:
-        node = NodeInfo.objects.get()
-        os.kill(node.miner_pid, SIGTERM)
+        os.kill(state.miner_pid, SIGTERM)
     except OSError as e:
         if e.errno != os.errno.ESRCH:
             print(f'miner.stop: {e.errno}: {e}')
     except Exception as e:
-        print(f'miner.stop: {e.errno}: {e}')
+        print(f'miner.stop: {e.__class__.__name__}: {e}')
 
 
 ###############################################################################
@@ -68,30 +61,33 @@ def announce_nonce(dad, block_json_string, block_hash, nonce):
         'nonce': nonce
     })
 
-    if response.status_code == 200:
-        exit(0)
+    if response.status_code != 200:
+        print(f'miner.announce_nonce: request failed: {response.text}')
 
-    print(f'miner.announce_nonce: request failed: {response.text}')
+    # FIXME: check if new block is ready to mine?
+    exit(0)
 
 
-def do_mine():
-    dad = Node.objects.get(pubkey=KeyPair.get_public_key()).server
+def do_mine(json_string):
+    server = None
+    for p in state.participants:
+        if p['id'] == state.participant_id:
+            server = p['server']
 
-    transactions = Transaction.objects.filter(used=False)
-    transactions = transactions.limit(settings.BLOCK_CAPACITY)
-    transactions = transactions.order_by('id')
+    if server is None:
+        print(f'Mommy, where am I?', p['id'])
 
     # wtf
-    if transactions.count() < settings.BLOCK_CAPACITY:
-        exit(-1)
+    transactions = json.loads(json_string)
+    if len(transactions) < settings.BLOCK_CAPACITY:
+        print('Dont shit on me, Rogers, did you know?')
 
     # create base
-    tx_dicts = [tx.dump() for tx in transactions]
+    base = {}
+    base['transactions'] = [tx.dump_sendable() for tx in transactions]
 
     # try coming up with random numbers until hash is good
     seed()
-    base = {}
-    base['transactions'] = json.dumps(tx_dicts)
     while True:
         nonce = randint(0, 4294967295)  # compute a random 32-bit value
         base['nonce'] = nonce
@@ -107,4 +103,4 @@ def do_mine():
 ################################################################################
 
 if __name__ == '__main__':
-    do_mine()
+    do_mine(sys.argv[1])
