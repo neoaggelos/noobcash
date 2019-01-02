@@ -168,4 +168,22 @@ class Block(object):
             return 'error'
 
 
+    @staticmethod
+    def create_genesis_block():
+        try:
+            with state.blockchain_lock, state.transactions_lock:
+                block = Block(
+                    transactions=list(state.transactions),
+                    nonce=0,
+                    previous_hash='1'
+                )
 
+                block.current_hash = block.calculate_hash()
+
+                state.blockchain = [block]
+                state.transactions = []
+
+            return True
+        except Exception as e:
+            print(f'Block.create_genesis_block: {e.__class__.__name__}: {e}')
+            return False

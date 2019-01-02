@@ -121,4 +121,4 @@ USE_TZ = True
 STATIC_URL = '/static/'
 
 # noobcash Coordinator
-COORDINATOR = 'http://localhost:8000/'
+COORDINATOR = '127.0.0.1:8000/'

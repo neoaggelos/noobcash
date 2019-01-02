@@ -61,7 +61,6 @@ class Transaction(object):
             recepient=self.recepient,
             amount=self.amount,
             inputs=self.inputs,
-            outputs=self.outputs
             ), sort_keys=True)
 
 
@@ -180,7 +179,12 @@ class Transaction(object):
                 inputs = [tx['id'] for tx in sender_utxos]
                 budget = sum(tx['amount'] for tx in sender_utxos if sender_utxos['who'] == sender)
 
-                outputs = [{
+                assert amount >= budget
+
+                t = Transaction(sender=sender, recepient=recepient, amount=amount, inputs=inputs)
+                t.sign()
+
+                t.outputs = [{
                     'id': t.id,
                     'who': t.sender,
                     'amount': budget - amount
@@ -190,10 +194,6 @@ class Transaction(object):
                     'amount': amount
                 }]
 
-                assert not amount < budget
-
-                t = Transaction(sender=sender, recepient=recepient, amount=amount, inputs=inputs, outputs=outputs)
-                t.sign()
                 state.utxos[sender] = [t.outputs[0]]
                 state.utxos[recepient].append(t.outputs[1])
 
@@ -204,5 +204,34 @@ class Transaction(object):
                         transactions = state.transactions[:settings.BLOCK_CAPACITY]
                         miner.start(transactions)
 
+            return True
+
         except Exception as e:
             print(f'Transaction.create_transaction: {e.__class__.__name__}: {e}')
+            return False
+
+    @staticmethod
+    def create_genesis_transaction(num_participants):
+        try:
+            t = Transaction(
+                sender=state.pubkey,
+                recepient=state.pubkey,
+                amount=100*num_participants,
+                inputs=[]
+            )
+            t.sign()
+
+            t.outputs = [{
+                'id': t.id,
+                'who': t.sender,
+                'amount': t.amount
+            }]
+
+            with state.utxos_lock, state.transactions_lock:
+                state.utxos[pubkey] = [t.outputs[0]]
+                state.transactions.append(t)
+
+            return True
+        except Exception as e:
+            print(f'Transaction.create_genesis_transaction: {e.__class__.__name__}: {e}')
+            return False

@@ -13,8 +13,9 @@ blockchain_lock = RLock()
 transactions = []
 transactions_lock = RLock()
 
-# List of participants `participants[pubkey] = {server, id}`
+# List of participants `participants[pubkey] = {host, id}`
 participants = {}
+participants_lock = RLock()
 
 # Number of participants
 num_participants = -1
