@@ -62,77 +62,110 @@ class Block(object):
 
     @staticmethod
     def validate_block(json_string):'
-        ''' validate incoming block '''
-        try:
-            # kill miner
-            # FIXME: this is exploitable. if we constantly send dummy blocks,
-            # miner is killed before he can get the job done, and nothing works
-            miner.stop()
+        '''
+        validate incoming block. returns:
+        'added'     <-- everything went ok, block was added in the blockchain (along with any new transactions)
+        'dropped'   <-- block is not increasing the chain length, so it was dismissed (***)
+        'error'     <-- error occured, block dismissed
+        'consensus' <-- branch detected, we need to ask the other nodes
 
-            # acquire locks for everything
-            with state.blockchain_lock, state.utxos_lock, state.transactions_lock:
-                prev_block = state.blockchain[-1]
+        [***]: if the chain length implied by the received block is smaller, then we may safely ignore it
+               if the chain length is the same, we may choose whichever chain we want at random, so we choose our own
+               if the chain length is bigger, we should receive another block soon.
+
+               --> in any case, we can safely drop this block, even if it is valid
+        '''
+
+        # acquire locks for everything
+        with state.blockchain_lock, state.utxos_lock, state.transactions_lock:
+            try:
+                # save state, in order to properly restore in case of a bad block
+                TRANSACTIONS_BACKUP = list(state.transactions)
+                UTXOS_BACKUP = list(state.utxos)
+                BLOCKCHAIN_BACKUP = list(state.blockchain)
+
+                # DISCUSS: this is exploitable. if we constantly send dummy blocks,
+                # miner is killed before he can get any work done, so undermine the
+                # mining ability of the node (ba-dum-tss)
+                #
+                # BUT: it is probably better to have the miner not work while
+                # validating an incoming block.
+                miner.stop()
 
                 block = Block(**json.loads(json_string), index=prev_block.index+1)
+                prev_block = state.blockchain[-1]
 
                 assert len(block.transactions) == settings.BLOCK_CAPACITY
                 assert block.calculate_hash().digest().decode() == block.current_hash
                 assert block.current_hash.startswith('0' * settings.DIFFICULTY)
 
-                new_transactions = list(state.transactions)
-                new_utxos = list(state.utxos)
-
                 used_inputs = []
                 if block.previous_hash == prev_block.current_hash:
-                    # HO-HO-HO
+                    # HO-HO-HO, OUR LUCKY DAY
                     for tx_json_string in block.transactions:
-                        block_tx = Transaction(**json.loads(tx_json_string))
-                        assert block_tx.id == block_tx.calculate_hash().digest().decode()
-                        assert block_tx.verify_signature()
+                        # DISCUSS: below `blocktx` is a transaction in the block we received,
+                        # and `pendingtx` is a transaction we have yet to mine a block for.
+                        #
+                        # if a `blocktx` is a transaction WE HAVE NOT HEARD ABOUT, and is
+                        # using a utxo that a `pendingtx` is already using, then validation
+                        # will fail. Is that what we want? A block contains proof-of-work,
+                        # so its transactions are to be trusted. Which one would we want to
+                        # keep? The incoming `blocktx`, or our own `pendingtx`? In any case
+                        # the sender is fraudulent, but if he is spreading different transactions
+                        # in the network, how will normal users know that they have discarded the
+                        # same one? Is the proof-of-work and consensus combo enough to eliminate
+                        # the issue at some point in the future?
+                        status, block_tx = Transaction.validate_transaction(tx_json_string)
+                        assert status != 'error'
 
-                        # FIXME: we never validate inputs or outputs
-                        # what could possibly go wrong?
-
-                        try:
-                            new_transactions.remove(block_tx)
-                        except:
-                            # This is funny. We received a block with a valid transaction
-                            # that we have yet to receive. print a relevant informative message
-                            print('lul')
-                            pass
-
+                        state.transactions.remove(block_tx)
                         used_inputs += block_tx.inputs
 
-                        # FIXME: possible error if transactions are not in sequential order
-                        # FIXME: unsafe because outputs are never validated using hash
-                        new_utxos[block_tx.sender] = [block_tx.outputs[0]]
-                        new_utxos[block_tx.recepient].append(block_tx.outputs[1])
 
-                    # for each transaction, check if its inputs were used in the transactions
-                    # that came with the new block. if so, then drop transaction
-                    for tx in new_transactions:
+                    # `state.transactions` and `state.utxos` are updated accordingly
+                    # as a result of `Transaction.validate_transaction()`
+
+                    # re-play the other transactions that are still waiting to enter a block
+                    # if any of their inputs were used, drop them (all `state.transactions`
+                    # have been validated when they were received, no other checks are needed)
+                    for tx in state.transactions:
                         for txid in tx.inputs:
                             if txid in used_inputs:
-                                new_transactions.remove(tx)
+                                state.transactions.remove(tx)
 
+                    # append block
+                    state.blockchain.append(block)
+
+                    # start miner if needed
+                    if len(state.transactions) >= settings.BLOCK_CAPACITY:
+                        miner.start(json.dumps(state.transactions[:settings.BLOCK_CAPACITY]))
+
+                    return 'ok'
 
                 else:
-                    # TODO: do consensus crap
-                    assert False
+                    for existing_block in state.blockchain:
+                        if existing_block.current_hash == block.previous_hash:
+                            return 'dropped'
 
-                state.transactions = new_transactions
-                state.utxos = new_utxos
-                state.blockchain.append(block)
+                    # CONTINUE HERE
+                    # previous block is different than the one we have
+                    # we must do consensus crap
+                    # yayy
 
-                # start miner if needed
-                if len(state.transactions) >= settings.BLOCK_CAPACITY:
-                    miner.start(json.dumps(state.transactions[:settings.BLOCK_CAPACITY]))
+                    # TODO: ask everyone for their blockchain, keep larger (smaller id wins ties)
+                    # TODO: replay said blockchain and create utxos
+                    # TODO: re-validate existing transactions
+                    # TODO: start miner if needed
+                    return 'consensus'
 
-            return True
+        except Exception as e:
+            # restore state and return
+            state.transactions = TRANSACTIONS_BACKUP
+            state.blockchain = BLOCKCHAIN_BACKUP
+            state.utxos = UTXOS_BACKUP
 
-    except Exception as e:
-        print(f'Block.validate_block: {e.__class__.__name__}: {e}')
-        return False
+            print(f'Block.validate_block: {e.__class__.__name__}: {e}')
+            return 'error'
 
 
 

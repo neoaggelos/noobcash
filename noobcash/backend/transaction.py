@@ -22,7 +22,7 @@ class Transaction(object):
     'signature': hash signed by sender private key
     '''
 
-    def __init__(self, sender, recepient, amount, inputs, id=None, signature=None, outputs=[]):
+    def __init__(self, sender, recepient, amount, inputs, outputs, id=None, signature=None):
         '''init'''
         self.sender = sender
         self.recepient = recepient
@@ -32,6 +32,13 @@ class Transaction(object):
         self.id = id
         self.signature = signature
         self.outputs = outputs
+
+    def __eq__(self, o):
+        ''' equality check, needed for comparing when removing/adding to list '''
+        if not isinstance(o, Transaction):
+            return false
+
+        return self.dump_sendable() == o.dump_sendable()
 
 
     def dump_sendable(self):
@@ -53,7 +60,8 @@ class Transaction(object):
             sender=self.sender,
             recepient=self.recepient,
             amount=self.amount,
-            inputs=self.inputs
+            inputs=self.inputs,
+            outputs=self.outputs
             ), sort_keys=True)
 
 
@@ -87,10 +95,22 @@ class Transaction(object):
 
 
     @staticmethod
-    def validate_transaction(json_string):
-        '''validate an incoming transaction, add to list of transactions and start miner if needed'''
+    def validate_transaction(json_string, start_miner=True):
+        '''
+        * validate an incoming transaction
+        * add to list of transactions
+        * start miner if requested/needed
+
+        @return (('added'/'exists'), transaction) OR ('error', None)
+        '''
         try:
             t = Transaction(**json.loads(json_string))
+
+            # FIXME: is this prone to create a deadlock?
+            with state.transactions_lock:
+                if t in state.transactions:
+                    return 'exists', t
+
             assert t.sender != t.recepient
             assert t.sender in state.participants
             assert t.recepient in state.participants
@@ -122,22 +142,14 @@ class Transaction(object):
 
                     assert found
 
-                # verify sender has enough cash
-                assert not (amount < sender_initial_money)
-
-                # create outputs
-                t.outputs = [{
-                    'id': t.id,
-                    'who': t.sender,
-                    'amount': sender_initial_money - t.amount
-                }, {
-                    'id': t.id,
-                    'who': t.recepient,
-                    'amount': t.amount
-                }]
+                # verify outputs as well
+                assert sender_initial_money >= t.amount
+                assert t.outputs[0]['who'] == t.sender and t.outputs[0]['amount'] == sender_initial_money - t.amount and t.outputs[0]['id'] = t.id
+                assert t.outputs[1]['who'] == t.recepient and t.outputs[1]['amount'] == t.amount and t.outputs[1]['id'] = t.id
 
                 # update utxos
-                state.utxos[t.sender] = [t.outputs[0]]
+                sender_utxos.append(t.outputs[0])
+                state.utxos[t.sender] = sender_utxos
                 state.utxos[t.recepient].append(t.outputs[1])
 
                 with state.transactions_lock:
@@ -147,11 +159,11 @@ class Transaction(object):
                         transactions = state.transactions[:settings.BLOCK_CAPACITY]
                         miner.start_if_not_running(transactions)
 
-            return True
+            return 'added', t
 
         except Exception as e:
             print(f'Transaction.validate_transaction: {e.__class__.__name__}: {e}')
-            return False
+            return 'error', None
 
 
     @staticmethod
@@ -168,12 +180,7 @@ class Transaction(object):
                 inputs = [tx['id'] for tx in sender_utxos]
                 budget = sum(tx['amount'] for tx in sender_utxos if sender_utxos['who'] == sender)
 
-                assert not amount < budget
-
-                t = Transaction(sender=sender, recepient=recepient, amount=amount, inputs=inputs)
-                t.sign()
-
-                t.outputs = [{
+                outputs = [{
                     'id': t.id,
                     'who': t.sender,
                     'amount': budget - amount
@@ -183,6 +190,10 @@ class Transaction(object):
                     'amount': amount
                 }]
 
+                assert not amount < budget
+
+                t = Transaction(sender=sender, recepient=recepient, amount=amount, inputs=inputs, outputs=outputs)
+                t.sign()
                 state.utxos[sender] = [t.outputs[0]]
                 state.utxos[recepient].append(t.outputs[1])
 
@@ -192,3 +203,6 @@ class Transaction(object):
                     if len(state.transactions) >= settings.BLOCK_CAPACITY:
                         transactions = state.transactions[:settings.BLOCK_CAPACITY]
                         miner.start(transactions)
+
+        except Exception as e:
+            print(f'Transaction.create_transaction: {e.__class__.__name__}: {e}')
