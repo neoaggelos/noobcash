@@ -11,7 +11,6 @@ from noobcash import settings
 
 class InitAsServerView(View):
     '''SERVER ONLY'''
-
     def post(request):
         count = request.POST.get('num_participants')
 
@@ -138,3 +137,7 @@ class ClientAcceptedView(View):
         return HttpResponse()
 
 
+class GetParticipantsListView(View):
+    '''Return list of known participants'''
+    def get(request):
+        return JsonResponse(state.participants)

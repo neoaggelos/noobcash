@@ -61,7 +61,7 @@ class Block(object):
 
 
     @staticmethod
-    def validate_block(json_string):'
+    def validate_block(json_string):
         '''
         validate incoming block. returns:
         'added'     <-- everything went ok, block was added in the blockchain (along with any new transactions)
@@ -74,6 +74,8 @@ class Block(object):
                if the chain length is bigger, we should receive another block soon.
 
                --> in any case, we can safely drop this block, even if it is valid
+
+        @return 'ok', 'consensus', 'error'
         '''
 
         # acquire locks for everything

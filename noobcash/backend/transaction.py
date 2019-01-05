@@ -167,10 +167,15 @@ class Transaction(object):
 
     @staticmethod
     def create_transaction(recepient, amount):
+        '''
+        create a new transaction that sends `amount` nbc to `recepient`
+        @return The transaction object, or None in case of error
+        '''
         try:
             sender = state.pubkey
 
             assert recepient in state.participants
+            amount = float(amount)
 
             with state.utxos_lock:
                 sender_utxos = list(state.utxos[sender])
@@ -204,11 +209,11 @@ class Transaction(object):
                         transactions = state.transactions[:settings.BLOCK_CAPACITY]
                         miner.start(transactions)
 
-            return True
+            return t
 
         except Exception as e:
             print(f'Transaction.create_transaction: {e.__class__.__name__}: {e}')
-            return False
+            return None
 
     @staticmethod
     def create_genesis_transaction(num_participants):
