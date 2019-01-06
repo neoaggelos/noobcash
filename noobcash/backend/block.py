@@ -36,6 +36,17 @@ class Block(object):
             self.timestamp = datetime.datetime.now()
 
 
+    def __eq__(self, o):
+        '''equality check'''
+        if not isinstance(o, Block):
+            return False
+
+        return (self.transactions == o.transactions
+            and self.nonce == o.nonce
+            and self.previous_hash == o.previous_hash
+            and self.current_hash == o.current_hash)
+
+
     def dump_sendable(self):
         ''' sendable json string '''
         return json.dumps(dict(
@@ -61,25 +72,25 @@ class Block(object):
 
 
     @staticmethod
-    def validate_block(json_string):
+    def validate_block(json_string, start_miner=True):
         '''
-        validate incoming block. returns:
-        'added'     <-- everything went ok, block was added in the blockchain (along with any new transactions)
-        'dropped'   <-- block is not increasing the chain length, so it was dismissed (***)
-        'error'     <-- error occured, block dismissed
-        'consensus' <-- branch detected, we need to ask the other nodes
+        validate incoming block.
+
+        @return
+        * 'οκ'        <-- everything went ok, block was added inλ the blockchain (along with any new transactions)
+        * 'dropped'   <-- block is not increasing the chain length, so it was dismissed (***)
+        * 'error'     <-- error occured, block dismissed
+        * 'consensus' <-- branch detected, we need to ask the other nodes
 
         [***]: if the chain length implied by the received block is smaller, then we may safely ignore it
                if the chain length is the same, we may choose whichever chain we want at random, so we choose our own
                if the chain length is bigger, we should receive another block soon.
 
                --> in any case, we can safely drop this block, even if it is valid
-
-        @return 'ok', 'consensus', 'error'
         '''
 
         # acquire locks for everything
-        with state.blockchain_lock, state.utxos_lock, state.transactions_lock:
+        with state.lock:
             try:
                 # save state, in order to properly restore in case of a bad block
                 TRANSACTIONS_BACKUP = list(state.transactions)
@@ -87,15 +98,15 @@ class Block(object):
                 BLOCKCHAIN_BACKUP = list(state.blockchain)
 
                 # DISCUSS: this is exploitable. if we constantly send dummy blocks,
-                # miner is killed before he can get any work done, so undermine the
+                # miner is killed before he can get any work done, so we undermine the
                 # mining ability of the node (ba-dum-tss)
                 #
                 # BUT: it is probably better to have the miner not work while
                 # validating an incoming block.
                 miner.stop()
 
-                block = Block(**json.loads(json_string), index=prev_block.index+1)
                 prev_block = state.blockchain[-1]
+                block = Block(**json.loads(json_string), index=prev_block.index+1)
 
                 assert len(block.transactions) == settings.BLOCK_CAPACITY
                 assert block.calculate_hash().digest().decode() == block.current_hash
@@ -117,7 +128,7 @@ class Block(object):
                         # in the network, how will normal users know that they have discarded the
                         # same one? Is the proof-of-work and consensus combo enough to eliminate
                         # the issue at some point in the future?
-                        status, block_tx = Transaction.validate_transaction(tx_json_string)
+                        status, block_tx = Transaction.validate_transaction(tx_json_string, start_miner=False)
                         assert status != 'error'
 
                         state.transactions.remove(block_tx)
@@ -130,6 +141,8 @@ class Block(object):
                     # re-play the other transactions that are still waiting to enter a block
                     # if any of their inputs were used, drop them (all `state.transactions`
                     # have been validated when they were received, no other checks are needed)
+
+                    # TODO: THIS IS WRONG, WE ALSO HAVE TO TAKE CARE OF THE UTXOS
                     for tx in state.transactions:
                         for txid in tx.inputs:
                             if txid in used_inputs:
@@ -139,7 +152,7 @@ class Block(object):
                     state.blockchain.append(block)
 
                     # start miner if needed
-                    if len(state.transactions) >= settings.BLOCK_CAPACITY:
+                    if len(state.transactions) >= settings.BLOCK_CAPACITY and start_miner:
                         miner.start(json.dumps(state.transactions[:settings.BLOCK_CAPACITY]))
 
                     return 'ok'
@@ -147,17 +160,13 @@ class Block(object):
                 else:
                     for existing_block in state.blockchain:
                         if existing_block.current_hash == block.previous_hash:
+                            # the new block's parent is a previous block. so this new block
+                            # creates a different chain, one whose length is not larger
+                            # than the one we have. we may choose whichever chain we want,
+                            # we choose our own for simplicity
                             return 'dropped'
 
-                    # CONTINUE HERE
-                    # previous block is different than the one we have
-                    # we must do consensus crap
-                    # yayy
-
-                    # TODO: ask everyone for their blockchain, keep larger (smaller id wins ties)
-                    # TODO: replay said blockchain and create utxos
-                    # TODO: re-validate existing transactions
-                    # TODO: start miner if needed
+                    # unknown block, ask other nodes
                     return 'consensus'
 
         except Exception as e:
@@ -171,9 +180,45 @@ class Block(object):
 
 
     @staticmethod
+    def create_block(transactions, nonce, sha):
+        '''
+        the miner found `nonce` for the list of `transactions`.
+        create a block, append to our own blockchain and return it
+        '''
+        try:
+            with state.lock:
+                assert len(transactions) == settings.BLOCK_CAPACITY
+
+                block = Block(
+                    transactions=list(transactions),
+                    nonce=nonce,
+                    current_hash=sha,
+                    previous_hash=state.blockchain[-1].current_hash,
+                    index=len(state.blockchain)
+                )
+
+                assert block.current_hash == block.calculate_hash().digest().decode()
+                assert block.current_hash.startswith('0' * settings.DIFFICULTY)
+
+                # assert that we created a block for the first N transactions
+                for t in transactions:
+                    assert t == state.transactions[0]
+                    state.transactions.pop(0)
+
+                # append to blockchain
+                state.blockchain.append(block)
+
+                return block
+
+        except Exception as e:
+            print('Block.create_block: {e.__class__.__name__}: {e}')
+            return None
+
+
+    @staticmethod
     def create_genesis_block():
         try:
-            with state.blockchain_lock, state.transactions_lock:
+            with state.lock:
                 block = Block(
                     transactions=list(state.transactions),
                     nonce=0,

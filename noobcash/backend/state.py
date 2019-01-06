@@ -5,17 +5,17 @@ from threading import RLock
 
 ################################################################################
 
+# Lock this before changing the global state
+lock = RLock()
+
 # List of validated blocks
 blockchain = []
-blockchain_lock = RLock()
 
 # List of valid transactions not yet in a block
 transactions = []
-transactions_lock = RLock()
 
 # List of participants `participants[pubkey] = {host, id}`
 participants = {}
-participants_lock = RLock()
 
 # Number of participants
 num_participants = -1
@@ -28,10 +28,13 @@ participant_id = -1
 pubkey = None
 privkey = None
 
-# Unspent transactions of each participant 
+# Unspent transactions of each participant
 # `utxos[pubkey] = [{transaction_id, who, amount}]`
 utxos = {}
-utxos_lock = RLock()
 
 # pid of miner (if running)
 miner_pid = None
+
+# Genesis block and utxos. Makes validating easier
+genesis_block = None
+genesis_utxos = []

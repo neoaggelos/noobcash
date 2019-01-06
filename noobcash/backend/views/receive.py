@@ -1,8 +1,9 @@
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseBadRequest
 from django.views import View
 
 from noobcash.backend.transaction import Transaction
 from noobcash.backend.block import Block
+from noobcash.backend import consensus
 
 class ReceiveTransaction(View):
     '''
@@ -31,12 +32,10 @@ class ReceiveBlock(View):
         res = Block.validate_block(block_json_string)
 
         if res == 'consensus':
-            # TODO: hit up everyone and ask for their blockchains, keep largest
-
-            result = 'ok/error'
-            return HttpResponse(result)
+            res = consensus.consensus()
+            return HttpResponse(res)
 
         if res == 'ok':
             return HttpResponse(res)
 
-        return HttpResponse(res, status=400)
+        return HttpResponseBadRequest(res)

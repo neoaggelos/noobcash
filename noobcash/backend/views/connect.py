@@ -6,10 +6,11 @@ from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseServer
 from django.views import View
 
 from noobcash.backend.transaction import Transaction
+from noobcash.backend.block import Block
 from noobcash.backend import state, keypair, multicast
 from noobcash import settings
 
-class InitAsServerView(View):
+class InitAsServer(View):
     '''SERVER ONLY'''
     def post(request):
         count = request.POST.get('num_participants')
@@ -22,7 +23,7 @@ class InitAsServerView(View):
             return HttpResponseBadRequest("no im not him")
 
         # we are totally safe now
-        with state.participants_lock:
+        with state.lock:
             if state.num_participants != -1 or state.participant_id != -1:
                 return HttpResponseBadRequest()
 
@@ -42,14 +43,14 @@ class InitAsServerView(View):
         return HttpResponse()
 
 
-class ClientConnectView(View):
+class ClientConnect(View):
     '''SERVER ONLY'''
     def post(request):
         host = request.POST.get('host')
         pubkey = request.POST.get('pubkey')
 
         # safe as a kite
-        with state.participants_lock, state.utxos_lock:
+        with state.lock:
             if state.num_participants == -1 or state.participant_id != 0:
                 return HttpResponseBadRequest()
 
@@ -63,7 +64,7 @@ class ClientConnectView(View):
             }
             state.utxos[pubkey] = []
 
-            if not Transaction.create_transaction(pubkey, 100):
+            if not Transaction.create_transaction(pubkey, 100, start_miner=False):
                 return HttpResponseServerError()
 
             # all clients connected, send out 'accepted' messages
@@ -76,8 +77,8 @@ class ClientConnectView(View):
                 data = {
                     'num_participants': state.num_participants,
                     'participants': state.participants,
-                    'blockchain': state.blockchain,
-                    'utxos': state.utxos
+                    'genesis_block': state.blockchain[0].dump_sendable(),
+                    'genesis_utxos': state.utxos
                 }
                 hosts = [p['host'] for p in state.participants]
 
@@ -86,10 +87,10 @@ class ClientConnectView(View):
             return HttpResponse()
 
 
-class InitAsClientView(View):
+class InitAsClient(View):
     '''CLIENT ONLY'''
     def post(request):
-        with state.participants_lock:
+        with state.lock:
             # too safe
             if state.num_participants != -1:
                 return HttpResponseBadRequest()
@@ -109,15 +110,15 @@ class InitAsClientView(View):
         return HttpResponse()
 
 
-class ClientAcceptedView(View):
+class ClientAccepted(View):
     '''CLIENT ONLY'''
     def post(request):
         num_participants = request.POST.get('num_participants')
         participants = request.POST.get('participants')
-        blockchain = request.POST.get('blockchain')
-        utxos = request.POST.get('utxos')
+        genesis_block_json = request.POST.get('genesis_block')
+        genesis_utxos = request.POST.get('genesis_utxos')
 
-        with state.participants_lock:
+        with state.lock:
             if len(state.participants) > 0:
                 return HttpResponseBadRequest()
 
@@ -130,14 +131,20 @@ class ClientAcceptedView(View):
 
             # initial blockchain contains genesis block
             # DISCUSS: we just `logged in`, do we trust him or should we check
-            with state.blockchain_lock, state.utxos_lock:
-                state.utxos = utxos
-                state.blockchain = blockchain
+            state.utxos = list(genesis_utxos)
+            state.blockchain = [Block(**json.loads(genesis_block_json), index=0)]
+
+            # keep a backup of the genesis block and its utxos.
+            # DISCUSS: this is to make validation easier when asking for consensus
+            state.genesis_utxos = genesis_utxos
+            state.genesis_block = Block(**json.loads(genesis_block_json), index=0)
+
+
 
         return HttpResponse()
 
 
-class GetParticipantsListView(View):
+class GetParticipantsList(View):
     '''Return list of known participants'''
     def get(request):
         return JsonResponse(state.participants)
