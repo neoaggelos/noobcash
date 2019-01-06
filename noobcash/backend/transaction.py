@@ -22,7 +22,7 @@ class Transaction(object):
     'signature': hash signed by sender private key
     '''
 
-    def __init__(self, sender, recepient, amount, inputs, outputs, id=None, signature=None):
+    def __init__(self, sender, recepient, amount, inputs, id=None, signature=None):
         '''init'''
         self.sender = sender
         self.recepient = recepient
@@ -31,7 +31,7 @@ class Transaction(object):
 
         self.id = id
         self.signature = signature
-        self.outputs = outputs
+        self.outputs = []
 
 
     def __eq__(self, o):
@@ -49,7 +49,6 @@ class Transaction(object):
             recepient=self.recepient,
             amount=self.amount,
             inputs=self.inputs,
-            outputs=self.outputs,
             id=self.id,
             signature=self.signature
         ), sort_keys=True)
@@ -72,7 +71,7 @@ class Transaction(object):
 
     def sign(self):
         '''sign a transaction using our private key'''
-        hash_obj = hash_transaction(self)
+        hash_obj = self.calculate_hash()
 
         rsa_key = RSA.importKey(state.privkey)
         signer = PKCS1_v1_5.new(rsa_key)
@@ -140,10 +139,19 @@ class Transaction(object):
 
                     assert found
 
-                # verify outputs as well
+                # verify money is enough
                 assert sender_initial_money >= t.amount
-                assert t.outputs[0]['who'] == t.sender and t.outputs[0]['amount'] == sender_initial_money - t.amount and t.outputs[0]['id'] = t.id
-                assert t.outputs[1]['who'] == t.recepient and t.outputs[1]['amount'] == t.amount and t.outputs[1]['id'] = t.id
+
+                # create outputs
+                t.outputs = [{
+                    'id': t.id,
+                    'who': t.sender,
+                    'amount': budget - amount
+                }, {
+                    'id': t.id,
+                    'who': t.recepient,
+                    'amount': amount
+                }]
 
                 # update utxos
                 sender_utxos.append(t.outputs[0])
@@ -203,8 +211,7 @@ class Transaction(object):
                 state.transactions.append(t)
 
                 if len(state.transactions) >= settings.BLOCK_CAPACITY and start_miner:
-                    transactions = state.transactions[:settings.BLOCK_CAPACITY]
-                    miner.start(transactions)
+                    miner.start(state.transactions[:settings.BLOCK_CAPACITY])
 
             return t
 

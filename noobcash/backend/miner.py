@@ -20,21 +20,21 @@ django.setup()
 from noobcash.backend import settings, state
 
 # dumb starter
-def _start(transactions_list):
+def _start(host, transactions):
     try:
-        proc = Popen(['python', __file__, transactions_list])
+        proc = Popen(['python', __file__, host, json.dumps(transactions)])
         state.miner_pid = proc.pid
 
     except Exception as e:
         print(f'miner.start: {e.__class__.__name__}: {e}')
 
 
-def start(transactions_list):
+def start(host, transactions):
     try:
         os.kill(state.miner_pid, 0)
 
     except:
-        _start(transactions_list)
+        _start(host, transactions)
 
 
 def stop():
@@ -49,17 +49,18 @@ def stop():
 
 ###############################################################################
 
-def announce_nonce(dad, transactions, nonce, sha):
+def announce_nonce(host, transactions, nonce, sha):
     # NOTE: miner is a fragile process, it may get killed at any point
     # dont start sending blocks around, if we die midway its gonna get bad
     # just tell dad and exit, let him worry about sending crap around
     api = f'{dad}/miner_finished'
 
+    # FIXME: timeout? host could kill miner during this request
     response = requests.post(api, {
         'transactions': transactions,
         'sha': sha,
         'nonce': nonce
-    }, wait)
+    })
 
     if response.status_code != 200:
         print(f'miner.announce_nonce: request failed: {response.text}')
@@ -68,16 +69,7 @@ def announce_nonce(dad, transactions, nonce, sha):
     exit(0)
 
 
-def do_mine(json_string):
-    host = None
-    for p in state.participants:
-        if p['id'] == state.participant_id:
-            host = p['host']
-
-    if host is None:
-        print(f'Mommy, where am I?', p['id'])
-        exit(-1)
-
+def do_mine(host, transactions):
     # wtf
     transactions = json.loads(json_string)
     if len(transactions) != settings.BLOCK_CAPACITY:
@@ -97,8 +89,9 @@ def do_mine(json_string):
         base_json_string = json.dumps(base, sort_keys=True)
         sha = SHA384.new(base_json_string).digest().decode()
 
+        # got it, tell everyone
         if sha.startswith('0' * settings.DIFFICULTY):
-            announce_nonce(host, transactions, sha, nonce)
+            announce_nonce(host, transactions, nonce, sha)
             exit(0)
 
         # DISCUSS
@@ -111,4 +104,5 @@ def do_mine(json_string):
 ################################################################################
 
 if __name__ == '__main__':
-    do_mine(sys.argv[1])
+
+    do_mine(sys.argv[1], **json.loads(sys.argv[2]))

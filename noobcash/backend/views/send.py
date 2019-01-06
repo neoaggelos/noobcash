@@ -80,4 +80,4 @@ class GetBalance(View):
                     'amount': sum(x['amount'] for x in state.participants[pubkey]) 
                 }
 
-        return JsonResponse(balance)
+        return JsonResponse(result)

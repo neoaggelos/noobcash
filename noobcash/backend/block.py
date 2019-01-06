@@ -77,7 +77,7 @@ class Block(object):
         validate incoming block.
 
         @return
-        * 'οκ'        <-- everything went ok, block was added inλ the blockchain (along with any new transactions)
+        * 'οκ'        <-- everything went ok, block was added in the blockchain (along with any new transactions)
         * 'dropped'   <-- block is not increasing the chain length, so it was dismissed (***)
         * 'error'     <-- error occured, block dismissed
         * 'consensus' <-- branch detected, we need to ask the other nodes
@@ -153,7 +153,7 @@ class Block(object):
 
                     # start miner if needed
                     if len(state.transactions) >= settings.BLOCK_CAPACITY and start_miner:
-                        miner.start(json.dumps(state.transactions[:settings.BLOCK_CAPACITY]))
+                        miner.start(state.transactions[:settings.BLOCK_CAPACITY])
 
                     return 'ok'
 
@@ -187,6 +187,7 @@ class Block(object):
         '''
         try:
             with state.lock:
+                transactions_backup = list(state.transactions)
                 assert len(transactions) == settings.BLOCK_CAPACITY
 
                 block = Block(
@@ -201,8 +202,10 @@ class Block(object):
                 assert block.current_hash.startswith('0' * settings.DIFFICULTY)
 
                 # assert that we created a block for the first N transactions
-                for t in transactions:
-                    assert t == state.transactions[0]
+                for tx_json_string in transactions:
+                    tx = json.loads(tx_json_string)
+
+                    assert tx['id'] == state.transactions[0].id
                     state.transactions.pop(0)
 
                 # append to blockchain
@@ -211,6 +214,7 @@ class Block(object):
                 return block
 
         except Exception as e:
+            state.transactions = transactions_backup
             print('Block.create_block: {e.__class__.__name__}: {e}')
             return None
 
