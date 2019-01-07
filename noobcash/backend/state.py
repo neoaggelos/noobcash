@@ -32,6 +32,9 @@ privkey = None
 # `utxos[pubkey] = [{transaction_id, who, amount}]`
 utxos = {}
 
+# Validated utxos, up to the point of the final validated block
+valid_utxos = {}
+
 # pid of miner (if running)
 miner_pid = None
 

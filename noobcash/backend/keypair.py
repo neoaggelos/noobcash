@@ -9,5 +9,7 @@ def generate_keypair():
 
     rsa_keypair = RSA.generate(2048)
 
-    state.privkey = rsa_keypair.exportKey().decode()
-    state.pubkey = rsa_keypair.publickey().exportKey().decode()
+    with state.lock:
+        state.privkey = rsa_keypair.exportKey().decode()
+        state.pubkey = rsa_keypair.publickey().exportKey().decode()
+

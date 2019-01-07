@@ -94,7 +94,7 @@ class Block(object):
             try:
                 # save state, in order to properly restore in case of a bad block
                 TRANSACTIONS_BACKUP = list(state.transactions)
-                UTXOS_BACKUP = list(state.utxos)
+                UTXOS_BACKUP = dict(state.utxos)
                 BLOCKCHAIN_BACKUP = list(state.blockchain)
 
                 # DISCUSS: this is exploitable. if we constantly send dummy blocks,
@@ -112,44 +112,28 @@ class Block(object):
                 assert block.calculate_hash().digest().decode() == block.current_hash
                 assert block.current_hash.startswith('0' * settings.DIFFICULTY)
 
-                used_inputs = []
+                # start from utxos as of last block
+                state.utxos = dict(state.valid_utxos)
+                state.transactions = []
+
                 if block.previous_hash == prev_block.current_hash:
                     # HO-HO-HO, OUR LUCKY DAY
-                    for tx_json_string in block.transactions:
-                        # DISCUSS: below `blocktx` is a transaction in the block we received,
-                        # and `pendingtx` is a transaction we have yet to mine a block for.
-                        #
-                        # if a `blocktx` is a transaction WE HAVE NOT HEARD ABOUT, and is
-                        # using a utxo that a `pendingtx` is already using, then validation
-                        # will fail. Is that what we want? A block contains proof-of-work,
-                        # so its transactions are to be trusted. Which one would we want to
-                        # keep? The incoming `blocktx`, or our own `pendingtx`? In any case
-                        # the sender is fraudulent, but if he is spreading different transactions
-                        # in the network, how will normal users know that they have discarded the
-                        # same one? Is the proof-of-work and consensus combo enough to eliminate
-                        # the issue at some point in the future?
-                        status, block_tx = Transaction.validate_transaction(tx_json_string, start_miner=False)
+                    for tx_json in block.transactions:
+                        # this will make sure transactions are valid, and it will update utxos as well
+                        status, block_tx = Transaction.validate_transaction(tx_json, start_miner=False)
                         assert status != 'error'
 
+                        # remove transaction after validating
                         state.transactions.remove(block_tx)
-                        used_inputs += block_tx.inputs
 
-
-                    # `state.transactions` and `state.utxos` are updated accordingly
-                    # as a result of `Transaction.validate_transaction()`
+                    # append block, update valid utxos
+                    state.blockchain.append(block)
+                    state.valid_utxos = dict(state.utxos)
 
                     # re-play the other transactions that are still waiting to enter a block
-                    # if any of their inputs were used, drop them (all `state.transactions`
-                    # have been validated when they were received, no other checks are needed)
-
-                    # TODO: THIS IS WRONG, WE ALSO HAVE TO TAKE CARE OF THE UTXOS
-                    for tx in state.transactions:
-                        for txid in tx.inputs:
-                            if txid in used_inputs:
-                                state.transactions.remove(tx)
-
-                    # append block
-                    state.blockchain.append(block)
+                    # If any one fails, sender is fraudulent, but oh well
+                    for tx_json in TRANSACTIONS_BACKUP:
+                        status, tx = Transaction.validate_transaction(tx_json, start_miner=False)
 
                     # start miner if needed
                     if len(state.transactions) >= settings.BLOCK_CAPACITY and start_miner:
@@ -211,6 +195,10 @@ class Block(object):
                 # append to blockchain
                 state.blockchain.append(block)
 
+                # TODO: this is not right, this will use the utxos of all transactions so far,
+                # not only the ones in the new block
+                state.valid_utxos = dict(state.utxos)
+
                 return block
 
         except Exception as e:
@@ -233,6 +221,7 @@ class Block(object):
 
                 state.blockchain = [block]
                 state.transactions = []
+                state.valid_utxos = dict(state.utxos)
 
             return True
         except Exception as e:

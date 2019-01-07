@@ -131,8 +131,9 @@ class ClientAccepted(View):
 
             # initial blockchain contains genesis block
             # DISCUSS: we just `logged in`, do we trust him or should we check
-            state.utxos = list(genesis_utxos)
+            state.utxos = dict(genesis_utxos)
             state.blockchain = [Block(**json.loads(genesis_block_json), index=0)]
+            state.valid_utxos = dict(state.utxos)
 
             # keep a backup of the genesis block and its utxos.
             # DISCUSS: this is to make validation easier when asking for consensus
@@ -148,3 +149,4 @@ class GetParticipantsList(View):
     '''Return list of known participants'''
     def get(request):
         return JsonResponse(state.participants)
+

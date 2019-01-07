@@ -13,7 +13,7 @@ def validate_chain(blockchain, pending):
     with state.lock:
         # restart from genesis block
         state.blockchain = list(state.genesis_block)
-        state.utxos = list(state.genesis_utxos)
+        state.utxos = dict(state.genesis_utxos)
 
         # pending transactions
         state.transactions = list(pending)
@@ -37,7 +37,7 @@ def consensus():
         # keep backup
         MAX_BLOCKCHAIN = list(state.blockchain)
         MAX_TRANSACTIONS = list(state.transactions)
-        MAX_UTXOS = list(state.utxos)
+        MAX_UTXOS = dict(state.utxos)
         MAX_LENGTH = len(MAX_BLOCKCHAIN)
 
         PENDING_TRANSACTIONS = list(state.transactions)
@@ -68,7 +68,7 @@ def consensus():
                 # if chain is valid, update
                 MAX_BLOCKCHAIN = list(state.blockchain)
                 MAX_TRANSACTIONS = list(state.transactions)
-                MAX_UTXOS = list(state.utxos)
+                MAX_UTXOS = dict(state.utxos)
                 MAX_LENGTH = len(MAX_BLOCKCHAIN)
 
             except Exception as e:
@@ -77,5 +77,5 @@ def consensus():
         # update with best blockchain found
         state.blockchain = list(MAX_BLOCKCHAIN)
         state.transactions = list(MAX_TRANSACTIONS)
-        state.utxos = list(MAX_UTXOS)
+        state.utxos = dict(MAX_UTXOS)
 
