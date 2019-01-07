@@ -69,7 +69,7 @@ class GetBalance(View):
         }
     }
 
-    It merely sums the amount of utxos for each user
+    It merely sums the amount of validated utxos for each user
     '''
     def get(request):
         with state.lock:
@@ -77,7 +77,7 @@ class GetBalance(View):
             for pubkey in state.participants:
                 result[state.participants[pubkey]['id']] = {
                     'pubkey': pubkey,
-                    'amount': sum(x['amount'] for x in state.participants[pubkey]) 
+                    'amount': sum(x['amount'] for x in state.valid_utxos[pubkey]) 
                 }
 
         return JsonResponse(result)
