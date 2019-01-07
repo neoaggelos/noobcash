@@ -6,6 +6,7 @@ import datetime
 from Crypto.Hash import SHA384
 
 from noobcash.backend import settings, miner, state
+from noobcash.backend.transaction import Transaction
 
 ################################################################################
 
@@ -121,7 +122,7 @@ class Block(object):
                     for tx_json in block.transactions:
                         # this will make sure transactions are valid, and it will update utxos as well
                         status, block_tx = Transaction.validate_transaction(tx_json, start_miner=False)
-                        assert status != 'error'
+                        assert status == 'added'
 
                         # remove transaction after validating
                         state.transactions.remove(block_tx)
@@ -137,7 +138,7 @@ class Block(object):
 
                     # start miner if needed
                     if len(state.transactions) >= settings.BLOCK_CAPACITY and start_miner:
-                        miner.start(state.transactions[:settings.BLOCK_CAPACITY])
+                        miner.start()
 
                     return 'ok'
 
@@ -164,14 +165,15 @@ class Block(object):
 
 
     @staticmethod
-    def create_block(transactions, nonce, sha):
+    def create_block(transactions, nonce, sha, start_miner=True):
         '''
         the miner found `nonce` for the list of `transactions`.
         create a block, append to our own blockchain and return it
         '''
         try:
             with state.lock:
-                transactions_backup = list(state.transactions)
+                TRANSACTIONS_BACKUP = list(state.transactions)
+                UTXOS_BACKUP = dict(state.utxos)
                 assert len(transactions) == settings.BLOCK_CAPACITY
 
                 block = Block(
@@ -185,24 +187,34 @@ class Block(object):
                 assert block.current_hash == block.calculate_hash().digest().decode()
                 assert block.current_hash.startswith('0' * settings.DIFFICULTY)
 
-                # assert that we created a block for the first N transactions
-                for tx_json_string in transactions:
-                    tx = json.loads(tx_json_string)
+                # start from utxos of last block
+                state.utxos = dict(state.valid_utxos)
+                state.transactions = []
 
-                    assert tx['id'] == state.transactions[0].id
-                    state.transactions.pop(0)
+                # assert that transaction is new
+                for tx_json_string in transactions:
+                    status, t = Transaction.validate_transaction(tx_json_string, start_miner=False)
+                    assert status == 'added'
 
                 # append to blockchain
                 state.blockchain.append(block)
 
-                # TODO: this is not right, this will use the utxos of all transactions so far,
-                # not only the ones in the new block
+                # save utxos up until this block
                 state.valid_utxos = dict(state.utxos)
+
+                # re-play transactions waiting to enter a block
+                for tx_json_string in TRANSACTIONS_BACKUP:
+                    status, t = Transaction.validate_transaction(tx_json_string, start_miner=False)
+
+                # re-start miner if needed
+                if start_miner and len(state.transactions) >= settings.BLOCK_CAPACITY:
+                    miner.start()
 
                 return block
 
         except Exception as e:
-            state.transactions = transactions_backup
+            state.transactions = TRANSACTIONS_BACKUP
+            state.utxos = UTXOS_BACKUP
             print('Block.create_block: {e.__class__.__name__}: {e}')
             return None
 

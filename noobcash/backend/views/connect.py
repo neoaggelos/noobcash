@@ -29,6 +29,7 @@ class InitAsServer(View):
 
             state.num_participants = count
             state.participant_id = 0
+            state.utxos = { }
             state.utxos[state.pubkey] = []
 
             keypair.generate_keypair()

@@ -161,8 +161,7 @@ class Transaction(object):
                 # append to transactions, and start miner if needed
                 state.transactions.append(t)
                 if len(state.transactions) >= settings.BLOCK_CAPACITY and start_miner:
-                    transactions = state.transactions[:settings.BLOCK_CAPACITY]
-                    miner.start_if_not_running(transactions)
+                    miner.start()
 
             return 'added', t
 
@@ -211,7 +210,7 @@ class Transaction(object):
                 state.transactions.append(t)
 
                 if len(state.transactions) >= settings.BLOCK_CAPACITY and start_miner:
-                    miner.start(state.transactions[:settings.BLOCK_CAPACITY])
+                    miner.start()
 
             return t
 
