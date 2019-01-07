@@ -1,5 +1,6 @@
 # connect.py
 
+import copy
 import requests
 
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseServerError
@@ -132,9 +133,9 @@ class ClientAccepted(View):
 
             # initial blockchain contains genesis block
             # DISCUSS: we just `logged in`, do we trust him or should we check
-            state.utxos = dict(genesis_utxos)
+            state.utxos = copy.deepcopy(genesis_utxos)
             state.blockchain = [Block(**json.loads(genesis_block_json), index=0)]
-            state.valid_utxos = dict(state.utxos)
+            state.valid_utxos = copy.deepcopy(state.utxos)
 
             # keep a backup of the genesis block and its utxos.
             # DISCUSS: this is to make validation easier when asking for consensus

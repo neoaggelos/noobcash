@@ -1,6 +1,8 @@
 # transaction.py
 
+import copy
 import json
+
 from Crypto.Hash import SHA384
 from Crypto.PublicKey import RSA
 from Crypto.Signature import PKCS1_v1_5
@@ -125,7 +127,7 @@ class Transaction(object):
                 assert len(set(inputs)) == len(inputs)
 
                 # verify that inputs are utxos
-                sender_utxos = list(state.utxos[t.sender])
+                sender_utxos = copy.deepcopy(state.utxos[t.sender])
                 sender_initial_money = 0
                 for txin_id in t.inputs:
                     found = False
@@ -183,8 +185,8 @@ class Transaction(object):
             amount = float(amount)
 
             with state.lock:
-                sender_utxos = list(state.utxos[sender])
-                recepient_utxos = list(state.utxos[recepient])
+                sender_utxos = copy.deepcopy(state.utxos[sender])
+                recepient_utxos = copy.deepcopy(state.utxos[recepient])
 
                 inputs = [tx['id'] for tx in sender_utxos]
                 budget = sum(tx['amount'] for tx in sender_utxos if sender_utxos['who'] == sender)
@@ -218,8 +220,10 @@ class Transaction(object):
             print(f'Transaction.create_transaction: {e.__class__.__name__}: {e}')
             return None
 
+
     @staticmethod
     def create_genesis_transaction(num_participants):
+        '''the one transaction to rule them all'''
         try:
             t = Transaction(
                 sender=state.pubkey,

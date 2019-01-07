@@ -1,5 +1,6 @@
 # block.py
 
+import copy
 import json
 import datetime
 
@@ -94,9 +95,9 @@ class Block(object):
         with state.lock:
             try:
                 # save state, in order to properly restore in case of a bad block
-                TRANSACTIONS_BACKUP = list(state.transactions)
-                UTXOS_BACKUP = dict(state.utxos)
-                BLOCKCHAIN_BACKUP = list(state.blockchain)
+                TRANSACTIONS_BACKUP = copy.deepcopy(state.transactions)
+                UTXOS_BACKUP = copy.deepcopy(state.utxos)
+                BLOCKCHAIN_BACKUP = copy.deepcopy(state.blockchain)
 
                 # DISCUSS: this is exploitable. if we constantly send dummy blocks,
                 # miner is killed before he can get any work done, so we undermine the
@@ -114,7 +115,7 @@ class Block(object):
                 assert block.current_hash.startswith('0' * settings.DIFFICULTY)
 
                 # start from utxos as of last block
-                state.utxos = dict(state.valid_utxos)
+                state.utxos = copy.deepcopy(state.valid_utxos)
                 state.transactions = []
 
                 if block.previous_hash == prev_block.current_hash:
@@ -129,7 +130,7 @@ class Block(object):
 
                     # append block, update valid utxos
                     state.blockchain.append(block)
-                    state.valid_utxos = dict(state.utxos)
+                    state.valid_utxos = copy.deepcopy(state.utxos)
 
                     # re-play the other transactions that are still waiting to enter a block
                     # If any one fails, sender is fraudulent, but oh well
@@ -172,12 +173,12 @@ class Block(object):
         '''
         try:
             with state.lock:
-                TRANSACTIONS_BACKUP = list(state.transactions)
-                UTXOS_BACKUP = dict(state.utxos)
+                TRANSACTIONS_BACKUP = copy.deepcopy(state.transactions)
+                UTXOS_BACKUP = copy.deepcopy(state.utxos)
                 assert len(transactions) == settings.BLOCK_CAPACITY
 
                 block = Block(
-                    transactions=list(transactions),
+                    transactions=copy.deepcopy(transactions),
                     nonce=nonce,
                     current_hash=sha,
                     previous_hash=state.blockchain[-1].current_hash,
@@ -188,7 +189,7 @@ class Block(object):
                 assert block.current_hash.startswith('0' * settings.DIFFICULTY)
 
                 # start from utxos of last block
-                state.utxos = dict(state.valid_utxos)
+                state.utxos = copy.deepcopy(state.valid_utxos)
                 state.transactions = []
 
                 # assert that transaction is new
@@ -200,7 +201,7 @@ class Block(object):
                 state.blockchain.append(block)
 
                 # save utxos up until this block
-                state.valid_utxos = dict(state.utxos)
+                state.valid_utxos = copy.deepcopy(state.utxos)
 
                 # re-play transactions waiting to enter a block
                 for tx_json_string in TRANSACTIONS_BACKUP:
@@ -221,10 +222,13 @@ class Block(object):
 
     @staticmethod
     def create_genesis_block():
+        '''
+        creates genesis block (the only unvalidated block for the chain)
+        '''
         try:
             with state.lock:
                 block = Block(
-                    transactions=list(state.transactions),
+                    transactions=[tx.dump_sendable() for tx in state.transactions]),
                     nonce=0,
                     previous_hash='1'
                 )
@@ -233,9 +237,10 @@ class Block(object):
 
                 state.blockchain = [block]
                 state.transactions = []
-                state.valid_utxos = dict(state.utxos)
+                state.valid_utxos = copy.deepcopy(state.utxos)
 
             return True
+
         except Exception as e:
             print(f'Block.create_genesis_block: {e.__class__.__name__}: {e}')
             return False
