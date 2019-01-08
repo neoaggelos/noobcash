@@ -6,7 +6,7 @@ def multicast(api: str, message: dict, hosts: list):
     '''hit `{host}/{api}/` of all hosts, with data `message`'''
 
     for h in hosts:
-        r = requests.post(f'{h}/{api}', message)
+        r = requests.post(f'{h}/{api}/', message)
 
         # cant do too much
         if r.status_code != 200:

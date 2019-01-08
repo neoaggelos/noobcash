@@ -38,6 +38,7 @@ class CreateAndSendBlock(View):
         nonce = request.POST['nonce']
         sha = request.POST['sha']
 
+        # FIXME: start miner after sending?
         res = Block.create_block(transactions, nonce, sha, start_miner=True)
         if res is None:
             return HttpResponseBadRequest()

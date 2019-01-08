@@ -13,10 +13,26 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-from django.contrib import admin
 from django.urls import path
+from noobcash.backend.views import *
 
-from django.http import HttpResponse
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    # connections
+    path('init_server/', InitAsServer.as_view()),
+    path('init_client/', InitAsClient.as_view()),
+    path('client_connect/', ClientConnect.as_view()),
+    path('client_accepted/', ClientAccepted.as_view()),
+
+    # get information
+    path('get_participants/', GetParticipantsList.as_view()),
+    path('get_blockchain/', GetBlockchain.as_view()),
+    path('get_balance/', GetBalance.as_view()),
+
+    # receive
+    path('receive_transaction/', ReceiveTransaction.as_view()),
+    path('receive_block/', ReceiveBlock.as_view()),
+
+    # send
+    path('create_transaction/', CreateAndSendTransaction.as_view()),
+    path('create_block/', CreateAndSendBlock.as_view())
 ]

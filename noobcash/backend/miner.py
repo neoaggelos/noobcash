@@ -57,7 +57,7 @@ def announce_nonce(host, transactions, nonce, sha):
     # NOTE: miner is a fragile process, it may get killed at any point
     # dont start sending blocks around, if we die midway its gonna get bad
     # just tell dad and exit, let him worry about sending crap around
-    api = f'{dad}/miner_finished'
+    api = f'{dad}/create_block/'
 
     # this will practically never return, host kills miner (us) when receiving a block
     response = requests.post(api, {
