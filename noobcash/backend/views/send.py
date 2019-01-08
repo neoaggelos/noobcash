@@ -8,19 +8,21 @@ from noobcash.backend import multicast, state
 class CreateAndSendTransaction(View):
     '''
     Create a transaction and multicast to all participants.
-
-    DISCUSS: For authentication purposes, we should require that the private key be given. Otherwise,
-    anyone can use this view to send our money
     '''
     def post(request):
-        recepient = request.POST['recepient']
-        amount = request.POST['amount']
-        res = Transaction.create_transaction(recepient, amount)
+        recepient = request.POST.get('recepient')
+        amount = request.POST.get('amount')
+        token = request.POST.get('token')
 
-        if res is None:
-            return HttpResponseBadRequest()
+        with state.lock:
+            if state.token != token:
+                return HttpResponseBadRequest('invalid token')
 
-        multicast.multicast('receive_transaction', {'transaction': res.dump_sendable()}, [p['host'] for p in state.participants])
+            res = Transaction.create_transaction(recepient, amount)
+            if res is None:
+                return HttpResponseBadRequest()
+
+            multicast.multicast('receive_transaction', {'transaction': res.dump_sendable()}, [p['host'] for p in state.participants])
 
         status = 200 if res != 'error' else 400
         return HttpResponse(res, status=status)
@@ -34,16 +36,17 @@ class CreateAndSendBlock(View):
     `create_block` will also make sure that the nonce is indeed correct
     '''
     def post(request):
-        transactions = request.POST['transactions']
-        nonce = request.POST['nonce']
-        sha = request.POST['sha']
+        transactions = request.POST.get('transactions')
+        nonce = request.POST.get('nonce')
+        sha = request.POST.get('sha')
 
         # FIXME: start miner after sending?
-        res = Block.create_block(transactions, nonce, sha, start_miner=True)
-        if res is None:
-            return HttpResponseBadRequest()
+        with state.lock:
+            res = Block.create_block(transactions, nonce, sha, start_miner=True)
+            if res is None:
+                return HttpResponseBadRequest()
 
-        res = multicast.multicast('receive_block', {'block': res.dump_sendable()}, [p['host'] for p in state.participants])
+            res = multicast.multicast('receive_block', {'block': res.dump_sendable()}, [p['host'] for p in state.participants])
 
         return HttpResponse(res, status=400)
 
@@ -78,7 +81,7 @@ class GetBalance(View):
             for pubkey in state.participants:
                 result[state.participants[pubkey]['id']] = {
                     'pubkey': pubkey,
-                    'amount': sum(x['amount'] for x in state.valid_utxos[pubkey]) 
+                    'amount': sum(x['amount'] for x in state.valid_utxos[pubkey])
                 }
 
         return JsonResponse(result)

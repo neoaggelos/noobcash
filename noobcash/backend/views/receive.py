@@ -11,7 +11,7 @@ class ReceiveTransaction(View):
     Everything is done in `validate_transaction()`
     '''
     def post(request):
-        trans_json_string = request.POST['transaction']
+        trans_json_string = request.POST.get('transaction')
         res = Transaction.validate_transaction(trans_json_string)
 
         status = 200 if res != 'error' else 400
@@ -28,7 +28,7 @@ class ReceiveBlock(View):
     In general, consensus is gonna be pretty slow.
     '''
     def post(request):
-        block_json_string = request.POST['block']
+        block_json_string = request.POST.get('block')
         res = Block.validate_block(block_json_string)
 
         if res == 'consensus':

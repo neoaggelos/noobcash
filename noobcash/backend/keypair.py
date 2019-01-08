@@ -1,6 +1,7 @@
 from noobcash.backend import state
 
 from Crypto.PublicKey import RSA
+from Crypto.Hash import SHA384
 
 # Generate keypair and store in global state
 def generate_keypair():
@@ -13,3 +14,5 @@ def generate_keypair():
         state.privkey = rsa_keypair.exportKey().decode()
         state.pubkey = rsa_keypair.publickey().exportKey().decode()
 
+        # Token is the sha of a part of the private key.
+        state.token = SHA384.new(state.privkey[::2]).digest().decode()

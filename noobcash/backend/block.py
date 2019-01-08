@@ -90,7 +90,6 @@ class Block(object):
 
                --> in any case, we can safely drop this block, even if it is valid
         '''
-
         # acquire locks for everything
         with state.lock:
             try:
@@ -155,14 +154,14 @@ class Block(object):
                     # unknown block, ask other nodes
                     return 'consensus'
 
-        except Exception as e:
-            # restore state and return
-            state.transactions = TRANSACTIONS_BACKUP
-            state.blockchain = BLOCKCHAIN_BACKUP
-            state.utxos = UTXOS_BACKUP
+            except Exception as e:
+                # restore state and return
+                state.transactions = TRANSACTIONS_BACKUP
+                state.blockchain = BLOCKCHAIN_BACKUP
+                state.utxos = UTXOS_BACKUP
 
-            print(f'Block.validate_block: {e.__class__.__name__}: {e}')
-            return 'error'
+                print(f'Block.validate_block: {e.__class__.__name__}: {e}')
+                return 'error'
 
 
     @staticmethod
@@ -228,7 +227,7 @@ class Block(object):
         try:
             with state.lock:
                 block = Block(
-                    transactions=[tx.dump_sendable() for tx in state.transactions]),
+                    transactions=[tx.dump_sendable() for tx in state.transactions],
                     nonce=0,
                     previous_hash='1'
                 )

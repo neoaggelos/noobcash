@@ -25,8 +25,10 @@ num_participants = -1
 participant_id = -1
 
 # Private and public key of this participant
+# Token is used as a means of authentication for creating transactions
 pubkey = None
 privkey = None
+token = None
 
 # Unspent transactions of each participant
 # `utxos[pubkey] = [{transaction_id, who, amount}]`
