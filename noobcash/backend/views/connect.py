@@ -45,6 +45,9 @@ class InitAsServer(View):
         count = int(request.POST.get('num_participants'))
         host = request.POST.get('host')
 
+        if count < 2:
+            return HttpResponseBadRequest('need >= 2 participants')
+
         # we are totally safe now
         with state.lock:
             # only once
