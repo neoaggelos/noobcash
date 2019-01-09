@@ -53,15 +53,15 @@ def stop():
 
 ###############################################################################
 
-def announce_nonce(host, transactions, nonce, sha):
+def announce_nonce(host, transactions_json, nonce, sha):
     # NOTE: miner is a fragile process, it may get killed at any point
     # dont start sending blocks around, if we die midway its gonna get bad
     # just tell dad and exit, let him worry about sending crap around
-    api = f'{dad}/create_block/'
+    api = f'{host}/create_block/'
 
     # this will practically never return, host kills miner (us) when receiving a block
     response = requests.post(api, {
-        'transactions': transactions,
+        'transactions': transactions_json,
         'sha': sha,
         'nonce': nonce
     })
@@ -73,9 +73,9 @@ def announce_nonce(host, transactions, nonce, sha):
     exit(0)
 
 
-def do_mine(host, transactions):
+def do_mine(host, transactions_json):
     # wtf
-    transactions = json.loads(json_string)
+    transactions = json.loads(transactions_json)
     if len(transactions) != settings.BLOCK_CAPACITY:
         print('Dont shit on me, Rogers, did you know?')
         exit(-1)
@@ -91,11 +91,12 @@ def do_mine(host, transactions):
         base['nonce'] = nonce
 
         base_json_string = json.dumps(base, sort_keys=True)
-        sha = SHA384.new(base_json_string).digest().decode()
+        sha = SHA384.new(base_json_string.encode()).hexdigest()
 
         # got it, tell everyone
         if sha.startswith('0' * settings.DIFFICULTY):
-            announce_nonce(host, transactions, nonce, sha)
+            # print('\n\n----GOT IT----\n\n', base_json_string, '\n', sha, '\n\n')
+            announce_nonce(host, transactions_json, nonce, sha)
             exit(0)
 
         # DISCUSS
@@ -110,4 +111,4 @@ def do_mine(host, transactions):
 
 if __name__ == '__main__':
     # well, you know
-    do_mine(sys.argv[1], **json.loads(sys.argv[2]))
+    do_mine(sys.argv[1], sys.argv[2])

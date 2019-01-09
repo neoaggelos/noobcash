@@ -1,15 +1,22 @@
-from django.http import HttpResponse, HttpResponseBadRequest
+import json
+
+from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.views import View
+
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 
 from noobcash.backend.transaction import Transaction
 from noobcash.backend.block import Block
 from noobcash.backend import multicast, state
 
+
+@method_decorator(csrf_exempt, name='dispatch')
 class CreateAndSendTransaction(View):
     '''
     Create a transaction and multicast to all participants.
     '''
-    def post(request):
+    def post(self, request):
         recepient = request.POST.get('recepient')
         amount = request.POST.get('amount')
         token = request.POST.get('token')
@@ -22,12 +29,11 @@ class CreateAndSendTransaction(View):
             if res is None:
                 return HttpResponseBadRequest()
 
-            multicast.multicast('receive_transaction', {'transaction': res.dump_sendable()}, [p['host'] for p in state.participants])
+            multicast.multicast('receive_transaction', {'transaction': res.dump_sendable()}, [p['host'] for p in state.participants.values() if p['id'] != state.participant_id])
 
-        status = 200 if res != 'error' else 400
-        return HttpResponse(res, status=status)
+        return HttpResponse()
 
-
+@method_decorator(csrf_exempt, name='dispatch')
 class CreateAndSendBlock(View):
     '''
     The miner uses this view to notify server that a correct nonce was found
@@ -35,9 +41,9 @@ class CreateAndSendBlock(View):
 
     `create_block` will also make sure that the nonce is indeed correct
     '''
-    def post(request):
-        transactions = request.POST.get('transactions')
-        nonce = request.POST.get('nonce')
+    def post(self, request):
+        transactions = json.loads(request.POST.get('transactions'))
+        nonce = int(request.POST.get('nonce'))
         sha = request.POST.get('sha')
 
         # FIXME: start miner after sending?
@@ -46,16 +52,17 @@ class CreateAndSendBlock(View):
             if res is None:
                 return HttpResponseBadRequest()
 
-            res = multicast.multicast('receive_block', {'block': res.dump_sendable()}, [p['host'] for p in state.participants])
+            multicast.multicast('receive_block', {'block': res.dump_sendable()}, [p['host'] for p in state.participants.values() if p['id'] != state.participant_id])
 
-        return HttpResponse(res, status=400)
+        return HttpResponse()
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class GetBlockchain(View):
     '''
     Return current blockchain
     '''
-    def get(request):
+    def get(self, request):
         with state.lock:
             # DISCUSS: we do not include the genesis block
             return JsonResponse({
@@ -63,6 +70,7 @@ class GetBlockchain(View):
             })
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class GetBalance(View):
     '''
     Return current wallet amount for each participant,
@@ -75,13 +83,13 @@ class GetBalance(View):
 
     It merely sums the amount of validated utxos for each user
     '''
-    def get(request):
+    def get(self, request):
         with state.lock:
             result = {}
             for pubkey in state.participants:
                 result[state.participants[pubkey]['id']] = {
                     'pubkey': pubkey,
-                    'amount': sum(x['amount'] for x in state.valid_utxos[pubkey])
+                    'amount': sum(x['amount'] for x in state.utxos[pubkey])
                 }
 
         return JsonResponse(result)

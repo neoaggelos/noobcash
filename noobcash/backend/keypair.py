@@ -11,8 +11,8 @@ def generate_keypair():
     rsa_keypair = RSA.generate(2048)
 
     with state.lock:
-        state.privkey = rsa_keypair.exportKey().decode()
-        state.pubkey = rsa_keypair.publickey().exportKey().decode()
+        state.privkey = rsa_keypair.exportKey('PEM').decode()
+        state.pubkey = rsa_keypair.publickey().exportKey('PEM').decode()
 
         # Token is the sha of a part of the private key.
-        state.token = SHA384.new(state.privkey[::2]).digest().decode()
+        state.token = SHA384.new(state.privkey[::2].encode()).hexdigest()

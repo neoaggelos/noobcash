@@ -44,7 +44,7 @@ def consensus():
 
         PENDING_TRANSACTIONS = copy.deepcopy(state.transactions)
 
-        for participant in state.participants:
+        for participant in state.participants.values():
             # skip self
             if participant['id'] == state.participant_id:
                 continue

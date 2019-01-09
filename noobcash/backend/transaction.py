@@ -6,6 +6,7 @@ import json
 from Crypto.Hash import SHA384
 from Crypto.PublicKey import RSA
 from Crypto.Signature import PKCS1_v1_5
+import base64
 
 from noobcash.backend import state, miner, settings
 
@@ -55,6 +56,17 @@ class Transaction(object):
             signature=self.signature
         ), sort_keys=True)
 
+    def dict(self):
+        '''convert to dict'''
+        return dict(
+            sender=self.sender,
+            recepient=self.recepient,
+            amount=self.amount,
+            inputs=self.inputs,
+            id=self.id,
+            signature=self.signature
+        )
+
 
     def dump(self):
         '''convert to json string to calculate hash'''
@@ -68,7 +80,7 @@ class Transaction(object):
 
     def calculate_hash(self):
         '''calculate hash of transaction'''
-        return SHA384.new(self.dump())
+        return SHA384.new(self.dump().encode())
 
 
     def sign(self):
@@ -78,8 +90,8 @@ class Transaction(object):
         rsa_key = RSA.importKey(state.privkey)
         signer = PKCS1_v1_5.new(rsa_key)
 
-        self.id = hash_obj.digest().decode()
-        self.signature = signer.sign(hash_obj)
+        self.id = hash_obj.hexdigest()
+        self.signature = base64.b64encode(signer.sign(hash_obj)).decode()
 
 
     def verify_signature(self):
@@ -89,7 +101,7 @@ class Transaction(object):
             verifier = PKCS1_v1_5.new(rsa_key)
 
             hash_obj = self.calculate_hash()
-            return verifier.verify(hash_obj, self.signature)
+            return verifier.verify(hash_obj, base64.b64decode(self.signature))
         except Exception as e:
             print(f'verify_signature: {e.__class__.__name__}: {e}')
             return False
@@ -118,41 +130,41 @@ class Transaction(object):
                 assert isinstance(t.id, str)
                 assert isinstance(t.signature, str)
                 assert t.amount > 0
-                assert t.id == t.calculate_hash().digest().decode()
+                assert t.id == t.calculate_hash().hexdigest()
 
                 # verify signature
                 assert t.verify_signature()
 
                 # verify that transaction inputs are unique
-                assert len(set(inputs)) == len(inputs)
+                assert len(set(t.inputs)) == len(t.inputs)
 
                 # verify that inputs are utxos
                 sender_utxos = copy.deepcopy(state.utxos[t.sender])
-                sender_initial_money = 0
+                budget = 0
                 for txin_id in t.inputs:
                     found = False
 
                     for utxo in sender_utxos:
                         if utxo['id'] == txin_id and utxo['who'] == t.sender:
                             found = True
-                            sender_initial_money += utxo['amount']
+                            budget += utxo['amount']
                             sender_utxos.remove(utxo)
                             break
 
                     assert found
 
                 # verify money is enough
-                assert sender_initial_money >= t.amount
+                assert budget >= t.amount
 
                 # create outputs
                 t.outputs = [{
                     'id': t.id,
                     'who': t.sender,
-                    'amount': budget - amount
+                    'amount': budget - t.amount
                 }, {
                     'id': t.id,
                     'who': t.recepient,
-                    'amount': amount
+                    'amount': t.amount
                 }]
 
                 # update utxos
@@ -169,6 +181,7 @@ class Transaction(object):
 
         except Exception as e:
             print(f'Transaction.validate_transaction: {e.__class__.__name__}: {e}')
+            # raise e
             return 'error', None
 
 
@@ -189,9 +202,9 @@ class Transaction(object):
                 recepient_utxos = copy.deepcopy(state.utxos[recepient])
 
                 inputs = [tx['id'] for tx in sender_utxos]
-                budget = sum(tx['amount'] for tx in sender_utxos if sender_utxos['who'] == sender)
+                budget = sum(tx['amount'] for tx in sender_utxos if tx['who'] == sender)
 
-                assert amount >= budget
+                assert budget >= amount
 
                 t = Transaction(sender=sender, recepient=recepient, amount=amount, inputs=inputs)
                 t.sign()
@@ -218,6 +231,7 @@ class Transaction(object):
 
         except Exception as e:
             print(f'Transaction.create_transaction: {e.__class__.__name__}: {e}')
+            raise Exception() from e
             return None
 
 
@@ -240,7 +254,7 @@ class Transaction(object):
             }]
 
             with state.lock:
-                state.utxos[pubkey] = [t.outputs[0]]
+                state.utxos[state.pubkey] = [t.outputs[0]]
                 state.transactions.append(t)
 
             return True

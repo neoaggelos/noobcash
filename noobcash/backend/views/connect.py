@@ -1,10 +1,13 @@
 # connect.py
 
 import copy
+import json
 import requests
 
-from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseServerError
+from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseServerError, JsonResponse
 from django.views import View
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 
 from noobcash.backend.transaction import Transaction
 from noobcash.backend.block import Block
@@ -12,9 +15,10 @@ from noobcash.backend import state, keypair, multicast, settings
 
 ################################################################################
 
+@method_decorator(csrf_exempt, name='dispatch')
 class InitAsClient(View):
     '''CLIENT ONLY'''
-    def post(request):
+    def post(self, request):
         host = request.POST.get('host')
 
         with state.lock:
@@ -23,24 +27,26 @@ class InitAsClient(View):
                 return HttpResponseBadRequest()
 
             # hit the coordinator jack
-            keypair.generate_keys()
-            api = f'{settings.COORDINATOR_HOST}/client_connect/'
-            data = {
-                'host': host,  # <-- this is our url
-                'pubkey': state.pubkey
-            }
+            keypair.generate_keypair()
 
-            response = requests.post(api, data)
-            if response.status_code != 200:
-                return HttpResponseBadRequest()
+        api = f'{settings.COORDINATOR}/client_connect/'
+        data = {
+            'host': host,  # <-- this is our url
+            'pubkey': state.pubkey
+        }
+
+        response = requests.post(api, data=data)
+        if response.status_code != 200:
+            return HttpResponseBadRequest()
 
         return HttpResponse(state.token)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class InitAsServer(View):
     '''SERVER ONLY'''
-    def post(request):
-        count = request.POST.get('num_participants')
+    def post(self, request):
+        count = int(request.POST.get('num_participants'))
         host = request.POST.get('host')
 
         # we are totally safe now
@@ -66,9 +72,10 @@ class InitAsServer(View):
         return HttpResponse(state.token)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class ClientConnect(View):
     '''SERVER ONLY'''
-    def post(request):
+    def post(self, request):
         host = request.POST.get('host')
         pubkey = request.POST.get('pubkey')
 
@@ -90,36 +97,38 @@ class ClientConnect(View):
             # all clients connected, send out 'accepted' messages
             if len(state.participants) == state.num_participants:
                 # create genesis block
-                Block.create_genesis_block()
+                if not Block.create_genesis_block():
+                    return HttpResponseBadRequest()
 
-                for p in state.participants:
+                for p in state.participants.values():
                     if p['id'] == state.participant_id:
                         continue
 
-                    requests.post(p['host'] + '/client_accepted/', json={
-                        'participant_id': p['id']
-                        'participants': state.participants,
+                    requests.post(p['host'] + '/client_accepted/', {
+                        'participant_id': p['id'],
+                        'participants': json.dumps(state.participants),
                         'genesis_block': state.blockchain[0].dump_sendable(),
-                        'genesis_utxos': state.utxos
+                        'genesis_utxos': json.dumps(state.utxos)
                     })
 
             return HttpResponse()
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class ClientAccepted(View):
     '''CLIENT ONLY'''
-    def post(request):
-        participant_id = request.POST.get('participant_id')
-        participants = request.POST.get('participants')
+    def post(self, request):
+        participant_id = int(request.POST.get('participant_id'))
+        participants = json.loads(request.POST.get('participants'))
         genesis_block_json = request.POST.get('genesis_block')
-        genesis_utxos = request.POST.get('genesis_utxos')
+        genesis_utxos = json.loads(request.POST.get('genesis_utxos'))
 
         with state.lock:
             if len(state.participants) > 0:
                 return HttpResponseBadRequest()
 
             state.participant_id = participant_id
-            state.participants = json.loads(participants)
+            state.participants = participants
             state.num_participants = len(state.participants)
 
             # initial blockchain contains genesis block
@@ -136,7 +145,8 @@ class ClientAccepted(View):
         return HttpResponse()
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class GetParticipantsList(View):
     '''Return list of known participants'''
-    def get(request):
+    def get(self, request):
         return JsonResponse(state.participants)

@@ -35,7 +35,7 @@ class Block(object):
         self.index = index
         self.timestamp = timestamp
         if timestamp is None:
-            self.timestamp = datetime.datetime.now()
+            self.timestamp = str(datetime.datetime.now())
 
 
     def __eq__(self, o):
@@ -59,6 +59,14 @@ class Block(object):
             previous_hash=self.previous_hash
         ), sort_keys=True)
 
+    def dict(self):
+        return dict(
+            timestamp=self.timestamp,
+            transactions=self.transactions,
+            nonce=self.nonce,
+            current_hash=self.current_hash,
+            previous_hash=self.previous_hash
+        )
 
     def dump(self):
         ''' used for calculating hash '''
@@ -70,7 +78,7 @@ class Block(object):
 
     def calculate_hash(self):
         ''' dont calculate hash '''
-        return SHA384.new(self.dump())
+        return SHA384.new(self.dump().encode())
 
 
     @staticmethod
@@ -110,7 +118,7 @@ class Block(object):
                 block = Block(**json.loads(json_string), index=prev_block.index+1)
 
                 assert len(block.transactions) == settings.BLOCK_CAPACITY
-                assert block.calculate_hash().digest().decode() == block.current_hash
+                assert block.calculate_hash().hexdigest() == block.current_hash
                 assert block.current_hash.startswith('0' * settings.DIFFICULTY)
 
                 # start from utxos as of last block
@@ -133,8 +141,10 @@ class Block(object):
 
                     # re-play the other transactions that are still waiting to enter a block
                     # If any one fails, sender is fraudulent, but oh well
-                    for tx_json in TRANSACTIONS_BACKUP:
-                        status, tx = Transaction.validate_transaction(tx_json, start_miner=False)
+                    for tx in TRANSACTIONS_BACKUP:
+                        tx_json = tx.dump_sendable()
+                        if tx_json not in block.transactions:
+                            status, tx = Transaction.validate_transaction(tx_json, start_miner=False)
 
                     # start miner if needed
                     if len(state.transactions) >= settings.BLOCK_CAPACITY and start_miner:
@@ -174,7 +184,11 @@ class Block(object):
             with state.lock:
                 TRANSACTIONS_BACKUP = copy.deepcopy(state.transactions)
                 UTXOS_BACKUP = copy.deepcopy(state.utxos)
+
                 assert len(transactions) == settings.BLOCK_CAPACITY
+
+                # print('create_block: Transactions:', type(transactions), len(transactions))
+                # print(transactions)
 
                 block = Block(
                     transactions=copy.deepcopy(transactions),
@@ -184,7 +198,7 @@ class Block(object):
                     index=len(state.blockchain)
                 )
 
-                assert block.current_hash == block.calculate_hash().digest().decode()
+                assert block.current_hash == block.calculate_hash().hexdigest()
                 assert block.current_hash.startswith('0' * settings.DIFFICULTY)
 
                 # start from utxos of last block
@@ -193,8 +207,13 @@ class Block(object):
 
                 # assert that transaction is new
                 for tx_json_string in transactions:
+                    # print('create_block: Transaction in block:', tx_json_string)
                     status, t = Transaction.validate_transaction(tx_json_string, start_miner=False)
+
                     assert status == 'added'
+
+                # remove them again
+                state.transactions = []
 
                 # append to blockchain
                 state.blockchain.append(block)
@@ -203,8 +222,10 @@ class Block(object):
                 state.valid_utxos = copy.deepcopy(state.utxos)
 
                 # re-play transactions waiting to enter a block
-                for tx_json_string in TRANSACTIONS_BACKUP:
-                    status, t = Transaction.validate_transaction(tx_json_string, start_miner=False)
+                for tx in TRANSACTIONS_BACKUP:
+                    tx_json_string = tx.dump_sendable()
+                    if tx_json_string not in transactions:
+                        status, t = Transaction.validate_transaction(tx_json_string, start_miner=False)
 
                 # re-start miner if needed
                 if start_miner and len(state.transactions) >= settings.BLOCK_CAPACITY:
@@ -215,7 +236,8 @@ class Block(object):
         except Exception as e:
             state.transactions = TRANSACTIONS_BACKUP
             state.utxos = UTXOS_BACKUP
-            print('Block.create_block: {e.__class__.__name__}: {e}')
+            print(f'Block.create_block: {e.__class__.__name__}: {e}')
+            # raise e
             return None
 
 
@@ -229,10 +251,12 @@ class Block(object):
                 block = Block(
                     transactions=[tx.dump_sendable() for tx in state.transactions],
                     nonce=0,
-                    previous_hash='1'
+                    previous_hash='1',
+                    index=0,
+                    current_hash='placeholder'
                 )
 
-                block.current_hash = block.calculate_hash()
+                block.current_hash = block.calculate_hash().hexdigest()
 
                 state.blockchain = [block]
                 state.transactions = []
