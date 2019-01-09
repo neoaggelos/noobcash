@@ -3,15 +3,11 @@ import json
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.views import View
 
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
-
 from noobcash.backend.transaction import Transaction
 from noobcash.backend.block import Block
 from noobcash.backend import multicast, state
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class CreateAndSendTransaction(View):
     '''
     Create a transaction and multicast to all participants.
@@ -33,7 +29,7 @@ class CreateAndSendTransaction(View):
 
         return HttpResponse()
 
-@method_decorator(csrf_exempt, name='dispatch')
+
 class CreateAndSendBlock(View):
     '''
     The miner uses this view to notify server that a correct nonce was found
@@ -45,6 +41,10 @@ class CreateAndSendBlock(View):
         transactions = json.loads(request.POST.get('transactions'))
         nonce = int(request.POST.get('nonce'))
         sha = request.POST.get('sha')
+        token = request.POST.get('token')
+
+        if token != state.token:
+            return HttpResponseBadRequest('invalid token')
 
         # FIXME: start miner after sending?
         with state.lock:
@@ -57,7 +57,6 @@ class CreateAndSendBlock(View):
         return HttpResponse()
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class GetBlockchain(View):
     '''
     Return current blockchain
@@ -70,7 +69,6 @@ class GetBlockchain(View):
             })
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class GetBalance(View):
     '''
     Return current wallet amount for each participant,

@@ -1,14 +1,11 @@
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.views import View
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
 
 from noobcash.backend.transaction import Transaction
 from noobcash.backend.block import Block
 from noobcash.backend import consensus
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class ReceiveTransaction(View):
     '''
     View that receives a new transaction from another client.
@@ -22,7 +19,6 @@ class ReceiveTransaction(View):
         return HttpResponse(res, status=status)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class ReceiveBlock(View):
     '''
     View that receives a new block from another client.

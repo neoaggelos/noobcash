@@ -6,8 +6,6 @@ import requests
 
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseServerError, JsonResponse
 from django.views import View
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
 
 from noobcash.backend.transaction import Transaction
 from noobcash.backend.block import Block
@@ -15,7 +13,6 @@ from noobcash.backend import state, keypair, multicast, settings
 
 ################################################################################
 
-@method_decorator(csrf_exempt, name='dispatch')
 class InitAsClient(View):
     '''CLIENT ONLY'''
     def post(self, request):
@@ -42,7 +39,6 @@ class InitAsClient(View):
         return HttpResponse(state.token)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class InitAsServer(View):
     '''SERVER ONLY'''
     def post(self, request):
@@ -72,7 +68,6 @@ class InitAsServer(View):
         return HttpResponse(state.token)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class ClientConnect(View):
     '''SERVER ONLY'''
     def post(self, request):
@@ -114,7 +109,6 @@ class ClientConnect(View):
             return HttpResponse()
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class ClientAccepted(View):
     '''CLIENT ONLY'''
     def post(self, request):
@@ -145,7 +139,6 @@ class ClientAccepted(View):
         return HttpResponse()
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class GetParticipantsList(View):
     '''Return list of known participants'''
     def get(self, request):

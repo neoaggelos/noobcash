@@ -23,7 +23,7 @@ from noobcash.backend import settings, state
 # dumb starter
 def _start(host, transactions):
     try:
-        proc = Popen(['python', __file__, host, json.dumps(transactions)])
+        proc = Popen(['python', __file__, host, json.dumps(transactions), state.token])
         state.miner_pid = proc.pid
 
     except Exception as e:
@@ -54,7 +54,7 @@ def stop():
 
 ###############################################################################
 
-def announce_nonce(host, transactions_json, nonce, sha):
+def announce_nonce(host, transactions_json, nonce, sha, token):
     # NOTE: miner is a fragile process, it may get killed at any point
     # dont start sending blocks around, if we die midway its gonna get bad
     # just tell dad and exit, let him worry about sending crap around
@@ -64,7 +64,8 @@ def announce_nonce(host, transactions_json, nonce, sha):
     response = requests.post(api, {
         'transactions': transactions_json,
         'sha': sha,
-        'nonce': nonce
+        'nonce': nonce,
+        'token': token
     })
 
     if response.status_code != 200:
@@ -74,7 +75,7 @@ def announce_nonce(host, transactions_json, nonce, sha):
     exit(0)
 
 
-def do_mine(host, transactions_json):
+def do_mine(host, transactions_json, token):
     # wtf
     transactions = json.loads(transactions_json)
     if len(transactions) != settings.BLOCK_CAPACITY:
@@ -96,7 +97,7 @@ def do_mine(host, transactions_json):
 
         # got it, tell everyone
         if sha.startswith('0' * settings.DIFFICULTY):
-            announce_nonce(host, transactions_json, nonce, sha)
+            announce_nonce(host, transactions_json, nonce, sha, token)
             exit(0)
 
         # DISCUSS
@@ -111,4 +112,4 @@ def do_mine(host, transactions_json):
 
 if __name__ == '__main__':
     # well, you know
-    do_mine(sys.argv[1], sys.argv[2])
+    do_mine(sys.argv[1], sys.argv[2], sys.argv[3])
