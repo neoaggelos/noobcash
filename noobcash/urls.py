@@ -25,9 +25,9 @@ urlpatterns = [
     path('client_accepted/', ClientAccepted.as_view()),
 
     # get information
-    path('get_participants/', GetParticipantsList.as_view()),
     path('get_blockchain/', GetBlockchain.as_view()),
     path('get_balance/', GetBalance.as_view()),
+    path('get_balance_latest/', GetLatestBalance.as_view()),
 
     # receive
     path('receive_transaction/', ReceiveTransaction.as_view()),

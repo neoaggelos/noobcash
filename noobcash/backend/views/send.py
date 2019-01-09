@@ -86,6 +86,32 @@ class GetBalance(View):
             result = {}
             for pubkey in state.participants:
                 result[state.participants[pubkey]['id']] = {
+                    'host': state.participants[pubkey]['host'],
+                    'pubkey': pubkey,
+                    'amount': sum(x['amount'] for x in state.valid_utxos[pubkey])
+                }
+
+        return JsonResponse(result)
+
+
+class GetLatestBalance(View):
+    '''
+    Return current wallet amount for each participant,
+    as a dict {
+        id: {
+            'pubkey': string,
+            'amount': nbc
+        }
+    }
+
+    It merely sums the amount of validated utxos for each user
+    '''
+    def get(self, request):
+        with state.lock:
+            result = {}
+            for pubkey in state.participants:
+                result[state.participants[pubkey]['id']] = {
+                    'host': state.participants[pubkey]['host'],
                     'pubkey': pubkey,
                     'amount': sum(x['amount'] for x in state.utxos[pubkey])
                 }

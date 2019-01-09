@@ -86,9 +86,6 @@ class ClientConnect(View):
             }
             state.utxos[pubkey] = []
 
-            if not Transaction.create_transaction(pubkey, 100, start_miner=False):
-                return HttpResponseServerError()
-
             # all clients connected, send out 'accepted' messages
             if len(state.participants) == state.num_participants:
                 # create genesis block
@@ -105,6 +102,18 @@ class ClientConnect(View):
                         'genesis_block': state.blockchain[0].dump_sendable(),
                         'genesis_utxos': json.dumps(state.utxos)
                     })
+
+                # after everyone has connected, send transactions
+                for pubkey in state.participants:
+                    if pubkey == state.pubkey:
+                        continue
+
+                    res = Transaction.create_transaction(pubkey, 100)
+                    if not res:
+                        return HttpResponseServerError()
+
+                    multicast.multicast('receive_transaction', {'transaction': res.dump_sendable()}, [p['host'] for p in state.participants.values() if p['id'] != state.participant_id])
+
 
             return HttpResponse()
 
@@ -137,9 +146,3 @@ class ClientAccepted(View):
             state.genesis_block = Block(**json.loads(genesis_block_json), index=0)
 
         return HttpResponse()
-
-
-class GetParticipantsList(View):
-    '''Return list of known participants'''
-    def get(self, request):
-        return JsonResponse(state.participants)

@@ -44,36 +44,39 @@ TOKEN = response.text
 
 ################################################################################
 
+participants = None
 
 # # Enter main loop
 while True:
     cmd = input("> ")
 
     print(cmd)
-    if cmd == 'get':
-        API = f'{HOST}/get_participants/'
-        response = requests.get(API)
-        print(response.json())
+    if cmd == 'balance':
+        participants = requests.get(f'{HOST}/get_balance/').json()
+
+        for id, p in participants.items():
+            print(id, '\t', p['amount'], '\t', p['host'], '\t', p['pubkey'][100:120])
+
+    if cmd == 'latest':
+        participants = requests.get(f'{HOST}/get_balance_latest/').json()
+
+        for id, p in participants.items():
+            print(id, '\t', p['amount'], '\t', p['host'], '\t', p['pubkey'][100:120])
 
     if cmd == 'blockchain':
         API = f'{HOST}/get_blockchain/'
         response = requests.get(API)
         print(response.json())
 
-    if cmd == 'balance':
-        API = f'{HOST}/get_balance/'
-        response = requests.get(API).json()
-
-        for id in response:
-            print(id, '\t', response[id]['amount'])
-
     if cmd.startswith('t'):
         parts = cmd.split()
 
-        API = f'{HOST}/get_balance/'
-        response = requests.get(API).json()
-        recepient = response[parts[1]]['pubkey']
-        amount = parts[2]
+        try:
+            participants = requests.get(f'{HOST}/get_balance/').json()
+            recepient = participants[parts[1]]['pubkey']
+            amount = parts[2]
+        except:
+            continue
 
         API = f'{HOST}/create_transaction/'
         for _ in range(5):
