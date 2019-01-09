@@ -20,9 +20,32 @@ parser.add_argument('port', help='port to use, e.g. "8000"', type=int)
 parser.add_argument('-n', help='Init as coordinator, for N partipipants', type=int)
 args = parser.parse_args()
 
-HOST = f'http://{args.host}:{args.port}'
+HOST_FOR_COORDINATOR = f'http://{args.host}:{args.port}'
+HOST = f'http://127.0.0.1:{args.port}'
 PORT = str(args.port)
 PARTICIPANTS = args.n
+
+################################################################################
+
+help_message = '''
+Usage:
+
+$ client.py HOST PORT           Start as participant
+$ client.py HOST PORT -n N      Start as coordinator, for N participants
+
+Available commands:
+
+* `t [recepient_id] [amount]`   Send `amount` NBC to `recepient`
+* `view`                        View transactions of the latest block
+* `balance`                     View balance of each wallet (as of last validated block)
+* `help`                        Print this help message
+* `exit`                        Exit client (will not stop server)
+
+Extra commands:
+
+* `view_all`                    View transactions of all validated blocks so far
+* `latest_balance`              View balance of each wallet (as of last received transaction)
+'''
 
 ################################################################################
 
@@ -32,7 +55,7 @@ API = f'{HOST}/init_server/' if PARTICIPANTS else f'{HOST}/init_client/'
 try:
     response = requests.post(API, {
         'num_participants': PARTICIPANTS,
-        'host': HOST
+        'host': HOST_FOR_COORDINATOR
     })
     assert response.status_code == 200
 except Exception as e:
@@ -44,31 +67,45 @@ TOKEN = response.text
 
 ################################################################################
 
-participants = None
-
-# # Enter main loop
+# Enter main loop
 while True:
     cmd = input("> ")
-
     print(cmd)
+
     if cmd == 'balance':
-        participants = requests.get(f'{HOST}/get_balance/').json()
+        # print list of participants with their balance as of the last validated block
+        balance = requests.get(f'{HOST}/get_balance/').json()
 
-        for id, p in participants.items():
-            print(id, '\t', p['amount'], '\t', p['host'], '\t', p['pubkey'][100:120])
+        for id, p in balance.items():
+            print(f'{"* " if p["this"] else "  "}{id}\t({p["pubkey"][100:120]})\t{p["host"]}\t{p["amount"]}\tNBC')
 
-    if cmd == 'latest':
-        participants = requests.get(f'{HOST}/get_balance_latest/').json()
+    elif cmd == 'latest_balance':
+        # print list of participants with their balance as of last valid transaction
+        balance = requests.get(f'{HOST}/get_balance_latest/').json()
 
-        for id, p in participants.items():
-            print(id, '\t', p['amount'], '\t', p['host'], '\t', p['pubkey'][100:120])
+        for id, p in balance.items():
+            print(f'{"* " if p["this"] else "  "}{id}\t({p["pubkey"][100:120]})\t{p["host"]}\t{p["amount"]}\tNBC')
 
-    if cmd == 'blockchain':
-        API = f'{HOST}/get_blockchain/'
-        response = requests.get(API)
-        print(response.json())
+    elif cmd == 'view':
+        # print list of transactions from last validated block
+        API = f'{HOST}/get_transactions/'
+        transactions = requests.get(API).json()['transactions']
 
-    if cmd.startswith('t'):
+        for tx in transactions:
+            print(f'{tx["sender_id"]} ({tx["sender"][100:120]})\t ->\t{tx["recepient_id"]} ({tx["recepient"][100:120]})\t{tx["amount"]}\tNBC')
+
+    elif cmd == 'view_all':
+        # print list of transactions from all blocks
+        API = f'{HOST}/get_transactions_all/'
+        blocks = requests.get(API).json()['blocks']
+        for b in blocks:
+            print(f'\nBlock {b["index"]}:')
+
+            for tx in b['transactions']:
+                print(f'{tx["sender_id"]} ({tx["sender"][100:120]})\t ->\t{tx["recepient_id"]} ({tx["recepient"][100:120]})\t{tx["amount"]}\tNBC')
+
+    elif cmd.startswith('t'):
+        # create a new transaction
         parts = cmd.split()
 
         try:
@@ -79,14 +116,22 @@ while True:
             continue
 
         API = f'{HOST}/create_transaction/'
-        for _ in range(5):
-            response = requests.post(API, {
-                'token': TOKEN,
-                'recepient': recepient,
-                'amount': amount
-            })
+        response = requests.post(API, {
+            'token': TOKEN,
+            'recepient': recepient,
+            'amount': amount
+        })
 
+        if response.status_code == 200:
+            print('OK.')
+        else:
+            print(f'Error: {response.text}')
 
+    elif cmd == 'help':
+        print(help_message)
 
-    if cmd == 'exit':
+    elif cmd == 'exit':
         exit(-1)
+
+    else:
+        print(f'{cmd}: Unknown command. See `help`')

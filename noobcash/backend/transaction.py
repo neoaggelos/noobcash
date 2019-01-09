@@ -195,6 +195,8 @@ class Transaction(object):
             sender = state.pubkey
 
             assert recepient in state.participants
+            assert recepient != sender
+
             amount = float(amount)
 
             with state.lock:
@@ -231,7 +233,6 @@ class Transaction(object):
 
         except Exception as e:
             print(f'Transaction.create_transaction: {e.__class__.__name__}: {e}')
-            raise Exception() from e
             return None
 
 
