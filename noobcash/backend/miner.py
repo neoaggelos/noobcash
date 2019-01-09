@@ -44,6 +44,7 @@ def start():
 def stop():
     try:
         os.kill(state.miner_pid, SIGTERM)
+        state.miner_pid = None
     except OSError as e:
         if e.errno != os.errno.ESRCH:
             print(f'miner.stop: {e.errno}: {e}')
@@ -95,7 +96,6 @@ def do_mine(host, transactions_json):
 
         # got it, tell everyone
         if sha.startswith('0' * settings.DIFFICULTY):
-            # print('\n\n----GOT IT----\n\n', base_json_string, '\n', sha, '\n\n')
             announce_nonce(host, transactions_json, nonce, sha)
             exit(0)
 

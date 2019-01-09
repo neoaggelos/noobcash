@@ -187,9 +187,6 @@ class Block(object):
 
                 assert len(transactions) == settings.BLOCK_CAPACITY
 
-                # print('create_block: Transactions:', type(transactions), len(transactions))
-                # print(transactions)
-
                 block = Block(
                     transactions=copy.deepcopy(transactions),
                     nonce=nonce,
@@ -207,9 +204,7 @@ class Block(object):
 
                 # assert that transaction is new
                 for tx_json_string in transactions:
-                    # print('create_block: Transaction in block:', tx_json_string)
                     status, t = Transaction.validate_transaction(tx_json_string, start_miner=False)
-
                     assert status == 'added'
 
                 # remove them again
@@ -237,7 +232,6 @@ class Block(object):
             state.transactions = TRANSACTIONS_BACKUP
             state.utxos = UTXOS_BACKUP
             print(f'Block.create_block: {e.__class__.__name__}: {e}')
-            # raise e
             return None
 
 

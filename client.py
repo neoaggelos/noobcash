@@ -29,8 +29,6 @@ PARTICIPANTS = args.n
 # init participant
 API = f'{HOST}/init_server/' if PARTICIPANTS else f'{HOST}/init_client/'
 
-print(PARTICIPANTS, API)
-
 try:
     response = requests.post(API, {
         'num_participants': PARTICIPANTS,
@@ -38,14 +36,11 @@ try:
     })
     assert response.status_code == 200
 except Exception as e:
-    print(response.text)
     print(f'Could not connect to {HOST}: {e.__class__.__name__}: {e}')
-    raise e
     exit(-1)
 
 # store returned token, will be used for sending transactions
 TOKEN = response.text
-print(TOKEN)
 
 ################################################################################
 
@@ -71,7 +66,6 @@ while True:
 
         for id in response:
             print(id, '\t', response[id]['amount'])
-        # print(response.json())
 
     if cmd.startswith('t'):
         parts = cmd.split()
