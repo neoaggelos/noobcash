@@ -10,7 +10,7 @@ def multicast(api: str, message: dict, hosts: list):
 
         # cant do too much
         if r.status_code != 200:
-            print(f'multicast: Request "{host}/{api}", json={message} failed')
+            print(f'multicast: Request "{h}/{api}", json={message} failed')
 
 
 ###############################################################################################

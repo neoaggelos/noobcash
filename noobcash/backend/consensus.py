@@ -41,8 +41,7 @@ def consensus():
         MAX_TRANSACTIONS = copy.deepcopy(state.transactions)
         MAX_UTXOS = copy.deepcopy(state.utxos)
         MAX_LENGTH = len(MAX_BLOCKCHAIN)
-
-        PENDING_TRANSACTIONS = copy.deepcopy(state.transactions)
+        TRANSACTIONS_BACKUP = copy.deepcopy(state.transactions)
 
         for participant in state.participants.values():
             # skip self
@@ -65,7 +64,7 @@ def consensus():
                 if len(received_blockchain) < MAX_LENGTH:
                     continue
 
-                assert validate_chain(received_blockchain, PENDING_TRANSACTIONS)
+                assert validate_chain(received_blockchain, TRANSACTIONS_BACKUP)
 
                 # if chain is valid, update
                 MAX_BLOCKCHAIN = copy.deepcopy(state.blockchain)

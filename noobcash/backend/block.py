@@ -125,12 +125,21 @@ class Block(object):
                 state.utxos = copy.deepcopy(state.valid_utxos)
                 state.transactions = []
 
+                used_inputs = []
+                new_validated_ids = []
                 if block.previous_hash == prev_block.current_hash:
                     # HO-HO-HO, OUR LUCKY DAY
                     for tx_json in block.transactions:
                         # this will make sure transactions are valid, and it will update utxos as well
-                        status, block_tx = Transaction.validate_transaction(tx_json, start_miner=False)
+                        status, block_tx = Transaction.validate_transaction(tx_json, start_miner=False, check_pending=False)
                         assert status == 'added'
+
+                        used_inputs += block_tx.inputs
+                        new_validated_ids.append(block_tx.id)
+
+                        for tx_id in block_tx.inputs:
+                            if tx_id in new_validated_ids:
+                                new_validated_ids.remove(tx_id)
 
                         # remove transaction after validating
                         state.transactions.remove(block_tx)
@@ -143,8 +152,11 @@ class Block(object):
                     # If any one fails, sender is fraudulent, but oh well
                     for tx in TRANSACTIONS_BACKUP:
                         tx_json = tx.dump_sendable()
-                        if tx_json not in block.transactions:
-                            status, tx = Transaction.validate_transaction(tx_json, start_miner=False)
+                        status, tx = Transaction.validate_transaction(tx_json, start_miner=False)
+
+                    # re-play pending transactions
+                    if settings.HOPEFUL:
+                        Transaction.replay_pending_transactions(new_validated_ids, used_inputs)
 
                     # start miner if needed
                     if len(state.transactions) >= settings.BLOCK_CAPACITY and start_miner:
@@ -183,6 +195,7 @@ class Block(object):
         try:
             with state.lock:
                 TRANSACTIONS_BACKUP = copy.deepcopy(state.transactions)
+                PENDING_TRANSACTIONS_BACKUP = copy.deepcopy(state.pending_transactions)
                 UTXOS_BACKUP = copy.deepcopy(state.utxos)
 
                 assert len(transactions) == settings.BLOCK_CAPACITY
@@ -202,10 +215,19 @@ class Block(object):
                 state.utxos = copy.deepcopy(state.valid_utxos)
                 state.transactions = []
 
-                # assert that transaction is new
+                used_inputs = []
+                new_validated_ids = []
                 for tx_json_string in transactions:
-                    status, t = Transaction.validate_transaction(tx_json_string, start_miner=False)
+                    status, t = Transaction.validate_transaction(tx_json_string, start_miner=False, check_pending=False)
+                    # assert that transaction is new
                     assert status == 'added'
+
+                    new_validated_ids.append(t.id)
+                    used_inputs += t.inputs
+
+                    for tx_id in t.inputs:
+                        if tx_id in new_validated_ids:
+                            new_validated_ids.remove(tx_id)
 
                 # remove them again
                 state.transactions = []
@@ -222,6 +244,10 @@ class Block(object):
                     if tx_json_string not in transactions:
                         status, t = Transaction.validate_transaction(tx_json_string, start_miner=False)
 
+                # re-play pending transactions
+                if settings.HOPEFUL:
+                    Transaction.replay_pending_transactions(new_validated_ids, used_inputs)
+
                 # re-start miner if needed
                 if start_miner and len(state.transactions) >= settings.BLOCK_CAPACITY:
                     miner.start()
@@ -231,6 +257,7 @@ class Block(object):
         except Exception as e:
             state.transactions = TRANSACTIONS_BACKUP
             state.utxos = UTXOS_BACKUP
+            state.pending_transactions = PENDING_TRANSACTIONS_BACKUP
             print(f'Block.create_block: {e.__class__.__name__}: {e}')
             return None
 

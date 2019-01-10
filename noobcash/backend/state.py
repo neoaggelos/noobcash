@@ -14,6 +14,11 @@ blockchain = []
 # List of valid transactions not yet in a block
 transactions = []
 
+# List of pending transactions. Transactions whose inputs were unknown
+# when they arrived. Used when settings.HOPEFUL == True, helps with transaction
+# flooding
+pending_transactions = []
+
 # List of participants `participants[pubkey] = {host, id}`
 participants = {}
 

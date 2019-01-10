@@ -13,7 +13,7 @@ class ReceiveTransaction(View):
     '''
     def post(self, request):
         trans_json_string = request.POST.get('transaction')
-        res = Transaction.validate_transaction(trans_json_string)
+        res, t = Transaction.validate_transaction(trans_json_string)
 
         status = 200 if res != 'error' else 400
         return HttpResponse(res, status=status)

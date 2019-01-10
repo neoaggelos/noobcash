@@ -126,6 +126,32 @@ while True:
             print('OK.')
         else:
             print(f'Error: {response.text}')
+    
+    elif cmd.startswith('source'):
+        # read file of transactions
+        parts = cmd.split()
+        participants = requests.get(f'{HOST}/get_balance/').json()
+
+        try:
+            fname = parts[1]
+            with open(fname, 'r') as fin:
+                for line in fin:
+                    idx, amount = line.split()
+                    recepient = participants[idx[2:]]['pubkey']
+
+                    API = f'{HOST}/create_transaction/'
+                    response = requests.post(API, {
+                        'token': TOKEN,
+                        'recepient': recepient,
+                        'amount': amount
+                    })
+
+                    if response.status_code == 200:
+                        print('OK.')
+                    else:
+                        print(f'Error: {response.text}')
+        except Exception as e:
+            print(f'error: {e.__class__.__name__}: {e}')
 
     elif cmd == 'help':
         print(help_message)

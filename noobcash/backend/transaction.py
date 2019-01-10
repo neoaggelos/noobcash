@@ -108,13 +108,15 @@ class Transaction(object):
 
 
     @staticmethod
-    def validate_transaction(json_string, start_miner=True):
+    def validate_transaction(json_string, start_miner=True, check_pending=True):
         '''
         * validate an incoming transaction
         * add to list of transactions
         * start miner if requested/needed
 
-        @return (('added'/'exists'), transaction) OR ('error', None)
+        IMPORTANT NOTE: global state is not altered in case of an invalid transaction
+
+        @return (('added'/'exists'), transaction) OR ('error', None) OR ('hopeful', None)
         '''
         try:
             t = Transaction(**json.loads(json_string))
@@ -138,9 +140,13 @@ class Transaction(object):
                 # verify that transaction inputs are unique
                 assert len(set(t.inputs)) == len(t.inputs)
 
+                # assert that it is not using itself as input
+                assert t.id not in t.inputs
+
                 # verify that inputs are utxos
                 sender_utxos = copy.deepcopy(state.utxos[t.sender])
                 budget = 0
+                add_to_pending = False
                 for txin_id in t.inputs:
                     found = False
 
@@ -151,7 +157,20 @@ class Transaction(object):
                             sender_utxos.remove(utxo)
                             break
 
-                    assert found
+                    if not found and settings.HOPEFUL:
+                        # FIXME: only if said input does not appear in a previous transaction?
+                        add_to_pending = True
+                        break
+                    else:
+                        assert found
+
+                # hopefully, the missing inputs are transactions that are still on their way
+                if add_to_pending:
+                    # ehh, an attack would be to keep sending the same transaction over and over
+                    if json_string not in state.pending_transactions:
+                        state.pending_transactions.append(json_string)
+
+                    return 'hopeful', None
 
                 # verify money is enough
                 assert budget >= t.amount
@@ -167,13 +186,17 @@ class Transaction(object):
                     'amount': t.amount
                 }]
 
-                # update utxos
+                # update utxos, this is final
                 sender_utxos.append(t.outputs[0])
                 state.utxos[t.sender] = sender_utxos
                 state.utxos[t.recepient].append(t.outputs[1])
+                state.transactions.append(t)
+
+                # pending txs have been checked, this will not crash
+                if settings.HOPEFUL and check_pending:
+                    Transaction.replay_pending_transactions([t.id], t.inputs)
 
                 # append to transactions, and start miner if needed
-                state.transactions.append(t)
                 if len(state.transactions) >= settings.BLOCK_CAPACITY and start_miner:
                     miner.start()
 
@@ -262,3 +285,46 @@ class Transaction(object):
         except Exception as e:
             print(f'Transaction.create_genesis_transaction: {e.__class__.__name__}: {e}')
             return False
+
+    @staticmethod
+    def replay_pending_transactions(validated_txin_ids=[], used_inputs=[]):
+        try:
+            pending_to_remove = []
+            pending_to_check = []
+            for pending_tx_json in state.pending_transactions:
+                pending_tx_dict = json.loads(pending_tx_json)
+                for pending_txin_id in pending_tx_dict['inputs']:
+                    # if any of its inputs were used, we will drop it
+                    if pending_txin_id in used_inputs:
+                        pending_to_remove.append(pending_tx_json)
+                        break
+
+                    # if new transaction is its input, we will try validating it
+                    elif pending_txin_id in validated_txin_ids:
+                        pending_to_check.append(pending_tx_json)
+                        break
+
+            # remove invalid, this is final.
+            for tx_json in pending_to_remove:
+                state.pending_transactions.remove(tx_json)
+
+            # for the (possibly many, in case of double spending) canditates
+            for tx_json in pending_to_check:
+                PENDING_TRANSACTIONS_BACKUP = copy.deepcopy(state.pending_transactions)
+
+                state.pending_transactions.remove(tx_json)
+                res, tx = Transaction.validate_transaction(tx_json, start_miner=False)
+                if res == 'added':
+                    # NOTE: adding means that all others will be removed in the recursion
+                    # we don't have to do anything else here
+                    break
+                elif res == 'hopeful':
+                    # this may happen if more than one inputs are missing
+                    # re-adding would not work well, we want to maintain order
+                    state.pending_transactions = PENDING_TRANSACTIONS_BACKUP
+                else:
+                    # this should never happen
+                    print('RANDOM LOL')
+
+        except Exception as e:
+            print(f'Transaction.check_pending_transactions: {e.__class__.__name__}: {e}')
