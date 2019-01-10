@@ -117,22 +117,27 @@ class Block(object):
                 prev_block = state.blockchain[-1]
                 block = Block(**json.loads(json_string), index=prev_block.index+1)
 
-                assert len(block.transactions) == settings.BLOCK_CAPACITY
-                assert block.calculate_hash().hexdigest() == block.current_hash
-                assert block.current_hash.startswith('0' * settings.DIFFICULTY)
+                if len(block.transactions) != settings.BLOCK_CAPACITY:
+                    raise Exception('invalid block capacity')
+                if block.calculate_hash().hexdigest() != block.current_hash:
+                    raise Exception('invalid block hash')
+                if not block.current_hash.startswith('0' * settings.DIFFICULTY):
+                    raise Exception('invalid proof of work')
 
-                # start from utxos as of last block
-                state.utxos = copy.deepcopy(state.valid_utxos)
-                state.transactions = []
-
-                used_inputs = []
-                new_validated_ids = []
                 if block.previous_hash == prev_block.current_hash:
                     # HO-HO-HO, OUR LUCKY DAY
+
+                    # start from utxos as of last block
+                    state.utxos = copy.deepcopy(state.valid_utxos)
+                    state.transactions = []
+
+                    used_inputs = []
+                    new_validated_ids = []
                     for tx_json in block.transactions:
                         # this will make sure transactions are valid, and it will update utxos as well
                         status, block_tx = Transaction.validate_transaction(tx_json, start_miner=False, check_pending=False)
-                        assert status == 'added'
+                        if status != 'added':
+                            raise Exception(f'invalid block transaction: validation returned {status}')
 
                         used_inputs += block_tx.inputs
                         new_validated_ids.append(block_tx.id)
@@ -152,11 +157,19 @@ class Block(object):
                     # If any one fails, sender is fraudulent, but oh well
                     for tx in TRANSACTIONS_BACKUP:
                         tx_json = tx.dump_sendable()
-                        status, tx = Transaction.validate_transaction(tx_json, start_miner=False)
+                        if tx_json not in block.transactions:
+                            status, tx = Transaction.validate_transaction(tx_json, start_miner=False)
+
+                            used_inputs += tx.inputs
+                            new_validated_ids.append(tx.id)
+
+                            for tx_id in tx.inputs:
+                                if tx_id in new_validated_ids:
+                                    new_validated_ids.remove(tx_id)
 
                     # re-play pending transactions
-                    if settings.HOPEFUL:
-                        Transaction.replay_pending_transactions(new_validated_ids, used_inputs)
+                    # if settings.HOPEFUL:
+                    #     Transaction.replay_pending_transactions(new_validated_ids, used_inputs)
 
                     # start miner if needed
                     if len(state.transactions) >= settings.BLOCK_CAPACITY and start_miner:
@@ -165,12 +178,17 @@ class Block(object):
                     return 'ok'
 
                 else:
-                    for existing_block in state.blockchain:
+                    for existing_block in state.blockchain[:-1]:
                         if existing_block.current_hash == block.previous_hash:
                             # the new block's parent is a previous block. so this new block
                             # creates a different chain, one whose length is not larger
                             # than the one we have. we may choose whichever chain we want,
                             # we choose our own for simplicity
+
+                            # start miner if needed
+                            if len(state.transactions) >= settings.BLOCK_CAPACITY and start_miner:
+                                miner.start()
+
                             return 'dropped'
 
                     # unknown block, ask other nodes
@@ -198,7 +216,8 @@ class Block(object):
                 PENDING_TRANSACTIONS_BACKUP = copy.deepcopy(state.pending_transactions)
                 UTXOS_BACKUP = copy.deepcopy(state.utxos)
 
-                assert len(transactions) == settings.BLOCK_CAPACITY
+                if len(transactions) != settings.BLOCK_CAPACITY:
+                    raise Exception('invalid block capacity')
 
                 block = Block(
                     transactions=copy.deepcopy(transactions),
@@ -208,8 +227,10 @@ class Block(object):
                     index=len(state.blockchain)
                 )
 
-                assert block.current_hash == block.calculate_hash().hexdigest()
-                assert block.current_hash.startswith('0' * settings.DIFFICULTY)
+                if block.current_hash != block.calculate_hash().hexdigest():
+                    raise Exception('invalid block hash')
+                if not block.current_hash.startswith('0' * settings.DIFFICULTY):
+                    raise Exception('invalid proof of work')
 
                 # start from utxos of last block
                 state.utxos = copy.deepcopy(state.valid_utxos)
@@ -219,8 +240,8 @@ class Block(object):
                 new_validated_ids = []
                 for tx_json_string in transactions:
                     status, t = Transaction.validate_transaction(tx_json_string, start_miner=False, check_pending=False)
-                    # assert that transaction is new
-                    assert status == 'added'
+                    if status != 'added':
+                        raise Exception('transaction already exists')
 
                     new_validated_ids.append(t.id)
                     used_inputs += t.inputs
@@ -282,6 +303,9 @@ class Block(object):
                 state.blockchain = [block]
                 state.transactions = []
                 state.valid_utxos = copy.deepcopy(state.utxos)
+
+                state.genesis_block = Block(**json.loads(block.dump_sendable()), index=0)
+                state.genesis_utxos = copy.deepcopy(state.utxos)
 
             return True
 

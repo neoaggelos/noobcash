@@ -23,6 +23,7 @@ from noobcash.backend import settings, state
 # dumb starter
 def _start(host, transactions):
     try:
+        print('Starting miner')
         proc = Popen(['python', __file__, host, json.dumps(transactions), state.token])
         state.miner_pid = proc.pid
 
@@ -36,13 +37,14 @@ def start():
 
     try:
         os.kill(state.miner_pid, 0)
-
+        print('Miner running already: PID', state.miner_pid)
     except:
         _start(host, transactions)
 
 
 def stop():
     try:
+        print('Killing miner: PID', state.miner_pid)
         os.kill(state.miner_pid, SIGTERM)
         state.miner_pid = None
     except OSError as e:

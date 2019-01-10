@@ -1,6 +1,7 @@
 from noobcash.backend import state
 from noobcash.backend.block import Block
 
+import json
 import copy
 import requests
 
@@ -13,22 +14,27 @@ def validate_chain(blockchain, pending):
     '''
     with state.lock:
         # restart from genesis block
-        state.blockchain = copy.deepcopy(state.genesis_block)
+        state.blockchain = [state.genesis_block]
         state.utxos = copy.deepcopy(state.genesis_utxos)
 
-        # pending transactions
-        # FIXME: this could be done just before the last block, for faster
-        state.transactions = copy.deepcopy(pending)
+        state.transactions = []
 
         # for the chain to be valid, we have to be able to append each block
         # without errors.
+        index = 1
         for block in blockchain:
             # `Block.validate_block()` will also update any pending transactions
             # with conflicting inputs
+            print(json.loads(block)['transactions'])
             res = Block.validate_block(block, start_miner=False)
 
             if res != 'ok':
                 return False
+
+        # play transactions over
+        for tx in pending:
+            tx_json = tx.dump_sendable()
+            Transaction.validate_transaction(tx_json, start_miner=False)
 
         return True
 
@@ -54,9 +60,10 @@ def consensus():
                 api = f'{host}/get_blockchain/'
 
                 response = requests.get(api)
-                assert response.status_code == 200
+                if response.status_code != 200:
+                    raise Exception('invalid blockchain response')
 
-                received_blockchain = response.json()['blockchain']
+                received_blockchain = json.loads(response.json()['blockchain'])
 
                 # NOTE: we received the blockchain WITHOUT the genesis block. This means
                 # that the received chain size is actually `len(received_blockchain) + 1`
@@ -64,7 +71,8 @@ def consensus():
                 if len(received_blockchain) < MAX_LENGTH:
                     continue
 
-                assert validate_chain(received_blockchain, TRANSACTIONS_BACKUP)
+                if not validate_chain(received_blockchain, TRANSACTIONS_BACKUP):
+                    raise Exception('received invalid chain')
 
                 # if chain is valid, update
                 MAX_BLOCKCHAIN = copy.deepcopy(state.blockchain)

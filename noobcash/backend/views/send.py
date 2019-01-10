@@ -5,7 +5,7 @@ from django.views import View
 
 from noobcash.backend.transaction import Transaction
 from noobcash.backend.block import Block
-from noobcash.backend import multicast, state
+from noobcash.backend import multicast, state, miner
 
 
 class CreateAndSendTransaction(View):
@@ -25,7 +25,7 @@ class CreateAndSendTransaction(View):
             if res is None:
                 return HttpResponseBadRequest('invalid transaction')
 
-            multicast.multicast('receive_transaction', {'transaction': res.dump_sendable()}, [p['host'] for p in state.participants.values() if p['id'] != state.participant_id])
+        multicast.multicast('receive_transaction', {'transaction': res.dump_sendable()}, [p['host'] for p in state.participants.values() if p['id'] != state.participant_id])
 
         return HttpResponse()
 
@@ -46,13 +46,15 @@ class CreateAndSendBlock(View):
         if token != state.token:
             return HttpResponseBadRequest('invalid token')
 
+        miner.stop()
+
         # FIXME: start miner after sending?
         with state.lock:
             res = Block.create_block(transactions, nonce, sha, start_miner=True)
             if res is None:
                 return HttpResponseBadRequest()
 
-            multicast.multicast('receive_block', {'block': res.dump_sendable()}, [p['host'] for p in state.participants.values() if p['id'] != state.participant_id])
+        multicast.multicast('receive_block', {'block': res.dump_sendable()}, [p['host'] for p in state.participants.values() if p['id'] != state.participant_id])
 
         return HttpResponse()
 
@@ -65,7 +67,7 @@ class GetBlockchain(View):
         with state.lock:
             # DISCUSS: we do not include the genesis block
             return JsonResponse({
-                'blockchain': [b.dump_sendable() for b in state.blockchain][1:]
+                'blockchain': json.dumps([b.dump_sendable() for b in state.blockchain][1:])
             })
 
 
@@ -167,20 +169,20 @@ class GetAllTransactions(View):
                     'transactions': txs
                 })
 
-            txs = []
-            for tx in state.transactions:
-                txs.append({
-                    'sender_id': state.participants[tx.sender]['id'],
-                    'sender': tx.sender,
-                    'recepient_id': state.participants[tx.recepient]['id'],
-                    'recepient': tx.recepient,
-                    'amount': tx.amount
-                })
+            # txs = []
+            # for tx in state.transactions:
+            #     txs.append({
+            #         'sender_id': state.participants[tx.sender]['id'],
+            #         'sender': tx.sender,
+            #         'recepient_id': state.participants[tx.recepient]['id'],
+            #         'recepient': tx.recepient,
+            #         'amount': tx.amount
+            #     })
 
-            if txs:
-                blocks.append({
-                    'index': 'pending',
-                    'transactions': txs
-                })
+            # if txs:
+            #     blocks.append({
+            #         'index': 'pending',
+            #         'transactions': txs
+            #     })
 
         return JsonResponse({'blocks': blocks})

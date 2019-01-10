@@ -125,23 +125,33 @@ class Transaction(object):
                 if t in state.transactions:
                     return 'exists', t
 
-                assert t.sender != t.recepient
-                assert t.sender in state.participants
-                assert t.recepient in state.participants
+                if t.sender == t.recepient:
+                    raise Exception('sender must be different from recepient')
+                if t.sender not in state.participants:
+                    raise Exception('unknown sender')
+                if t.recepient not in state.participants:
+                    raise Exception('unknown recepient')
 
-                assert isinstance(t.id, str)
-                assert isinstance(t.signature, str)
-                assert t.amount > 0
-                assert t.id == t.calculate_hash().hexdigest()
+                if not isinstance(t.id, str):
+                    raise Exception('invalid hash type')
+                if not isinstance(t.signature, str):
+                    raise Exception('invalid signature type')
+                if t.amount <= 0:
+                    raise Exception('negative amount?')
+                if t.id != t.calculate_hash().hexdigest():
+                    raise Exception('invalid hash')
 
                 # verify signature
-                assert t.verify_signature()
+                if not t.verify_signature():
+                    raise Exception('invalid signature')
 
                 # verify that transaction inputs are unique
-                assert len(set(t.inputs)) == len(t.inputs)
+                if len(set(t.inputs)) != len(t.inputs):
+                    raise Exception('duplicate inputs')
 
                 # assert that it is not using itself as input
-                assert t.id not in t.inputs
+                if t.id in t.inputs:
+                    raise Exception('invalid inputs')
 
                 # verify that inputs are utxos
                 sender_utxos = copy.deepcopy(state.utxos[t.sender])
@@ -157,12 +167,16 @@ class Transaction(object):
                             sender_utxos.remove(utxo)
                             break
 
-                    if not found and settings.HOPEFUL:
-                        # FIXME: only if said input does not appear in a previous transaction?
-                        add_to_pending = True
-                        break
-                    else:
-                        assert found
+                    if not found:
+                        print('SENDER UTXOS:', [u['id'] for u in state.utxos[t.sender]])
+                        print('TX INPUTS:', t.inputs)
+                        print('GENESIS UTXOS:', state.genesis_utxos)
+                        print('GENESIS BLOCK:', state.genesis_block.dump_sendable())
+
+                        if settings.HOPEFUL:
+                            add_to_pending = True
+                        else:
+                            raise Exception('missing transaction inputs')
 
                 # hopefully, the missing inputs are transactions that are still on their way
                 if add_to_pending:
@@ -173,7 +187,8 @@ class Transaction(object):
                     return 'hopeful', None
 
                 # verify money is enough
-                assert budget >= t.amount
+                if budget < t.amount:
+                    raise Exception('not enough money')
 
                 # create outputs
                 t.outputs = [{
@@ -217,8 +232,10 @@ class Transaction(object):
         try:
             sender = state.pubkey
 
-            assert recepient in state.participants
-            assert recepient != sender
+            if recepient not in state.participants:
+                raise Exception('unknown recepient')
+            if sender == recepient:
+                raise Exception('sender must be different from recepient')
 
             amount = float(amount)
 
@@ -229,7 +246,8 @@ class Transaction(object):
                 inputs = [tx['id'] for tx in sender_utxos]
                 budget = sum(tx['amount'] for tx in sender_utxos if tx['who'] == sender)
 
-                assert budget >= amount
+                if budget < amount:
+                    raise Exception('not enough money')
 
                 t = Transaction(sender=sender, recepient=recepient, amount=amount, inputs=inputs)
                 t.sign()
@@ -317,6 +335,7 @@ class Transaction(object):
                 if res == 'added':
                     # NOTE: adding means that all others will be removed in the recursion
                     # we don't have to do anything else here
+                    # TODO: must add before any transactions that use it (??)
                     break
                 elif res == 'hopeful':
                     # this may happen if more than one inputs are missing

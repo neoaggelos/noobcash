@@ -33,10 +33,16 @@ class ReceiveBlock(View):
         res = Block.validate_block(block_json_string)
 
         if res == 'consensus':
+            print('need consensus vote')
             res = consensus.consensus()
             return HttpResponse(res)
 
         if res == 'ok':
+            print('block is ok')
+            return HttpResponse(res)
+        
+        if res == 'dropped':
+            print('dropping')
             return HttpResponse(res)
 
         return HttpResponseBadRequest(res)
