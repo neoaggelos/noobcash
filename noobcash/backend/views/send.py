@@ -27,6 +27,8 @@ class CreateAndSendTransaction(View):
 
         multicast.multicast('receive_transaction', {'transaction': res.dump_sendable()}, [p['host'] for p in state.participants.values() if p['id'] != state.participant_id])
 
+        miner.start_if_needed()
+
         return HttpResponse()
 
 
@@ -50,7 +52,9 @@ class CreateAndSendBlock(View):
 
         # FIXME: start miner after sending?
         with state.lock:
-            res = Block.create_block(transactions, nonce, sha, start_miner=True)
+            res = Block.create_block(transactions, nonce, sha)
+            miner.start_if_needed()
+
             if res is None:
                 return HttpResponseBadRequest()
 
@@ -64,10 +68,10 @@ class GetBlockchain(View):
     Return current blockchain
     '''
     def get(self, request):
-        with state.lock:
+        with state.blockchain_public_lock:
             # DISCUSS: we do not include the genesis block
             return JsonResponse({
-                'blockchain': json.dumps([b.dump_sendable() for b in state.blockchain][1:])
+                'blockchain': json.dumps(state.blockchain_public)
             })
 
 
@@ -135,9 +139,8 @@ class GetTransactions(View):
 
                 result.append({
                     'sender_id': state.participants[tx.sender]['id'],
-                    'sender': tx.sender,
                     'recepient_id': state.participants[tx.recepient]['id'],
-                    'recepient': tx.recepient,
+                    'id': tx.id,
                     'amount': tx.amount
                 })
 
@@ -158,15 +161,16 @@ class GetAllTransactions(View):
 
                     txs.append({
                         'sender_id': state.participants[tx.sender]['id'],
-                        'sender': tx.sender,
                         'recepient_id': state.participants[tx.recepient]['id'],
-                        'recepient': tx.recepient,
+                        'id': tx.id,
                         'amount': tx.amount
                     })
 
                 blocks.append({
                     'index': block.index,
-                    'transactions': txs
+                    'transactions': txs,
+                    'hash': block.current_hash,
+                    'prev': block.previous_hash
                 })
 
             # txs = []

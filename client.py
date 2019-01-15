@@ -92,17 +92,17 @@ while True:
         transactions = requests.get(API).json()['transactions']
 
         for tx in transactions:
-            print(f'{tx["sender_id"]} ({tx["sender"][100:120]})\t ->\t{tx["recepient_id"]} ({tx["recepient"][100:120]})\t{tx["amount"]}\tNBC')
+            print(f'{tx["sender_id"]}\t->\t{tx["recepient_id"]}\t{tx["amount"]}\tNBC\t{tx["id"][:10]}')
 
     elif cmd == 'view_all':
         # print list of transactions from all blocks
         API = f'{HOST}/get_transactions_all/'
         blocks = requests.get(API).json()['blocks']
         for b in blocks:
-            print(f'\nBlock {b["index"]}:')
+            print(f'\nBlock {b["index"]}: (SHA: {b["hash"][:15]}\tPREV: {b["prev"][:15]})')
 
             for tx in b['transactions']:
-                print(f'{tx["sender_id"]} ({tx["sender"][100:120]})\t ->\t{tx["recepient_id"]} ({tx["recepient"][100:120]})\t{tx["amount"]}\tNBC')
+                print(f'{tx["sender_id"]}\t->\t{tx["recepient_id"]}\t{tx["amount"]}\tNBC\t{tx["id"][:10]}')
 
     elif cmd.startswith('t'):
         # create a new transaction

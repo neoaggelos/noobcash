@@ -82,7 +82,7 @@ class Block(object):
 
 
     @staticmethod
-    def validate_block(json_string, start_miner=True):
+    def validate_block(json_string):
         '''
         validate incoming block.
 
@@ -106,14 +106,6 @@ class Block(object):
                 UTXOS_BACKUP = copy.deepcopy(state.utxos)
                 BLOCKCHAIN_BACKUP = copy.deepcopy(state.blockchain)
 
-                # DISCUSS: this is exploitable. if we constantly send dummy blocks,
-                # miner is killed before he can get any work done, so we undermine the
-                # mining ability of the node (ba-dum-tss)
-                #
-                # BUT: it is probably better to have the miner not work while
-                # validating an incoming block.
-                miner.stop()
-
                 prev_block = state.blockchain[-1]
                 block = Block(**json.loads(json_string), index=prev_block.index+1)
 
@@ -131,20 +123,11 @@ class Block(object):
                     state.utxos = copy.deepcopy(state.valid_utxos)
                     state.transactions = []
 
-                    used_inputs = []
-                    new_validated_ids = []
                     for tx_json in block.transactions:
                         # this will make sure transactions are valid, and it will update utxos as well
-                        status, block_tx = Transaction.validate_transaction(tx_json, start_miner=False, check_pending=False)
+                        status, block_tx = Transaction.validate_transaction(tx_json)
                         if status != 'added':
                             raise Exception(f'invalid block transaction: validation returned {status}')
-
-                        used_inputs += block_tx.inputs
-                        new_validated_ids.append(block_tx.id)
-
-                        for tx_id in block_tx.inputs:
-                            if tx_id in new_validated_ids:
-                                new_validated_ids.remove(tx_id)
 
                         # remove transaction after validating
                         state.transactions.remove(block_tx)
@@ -153,27 +136,16 @@ class Block(object):
                     state.blockchain.append(block)
                     state.valid_utxos = copy.deepcopy(state.utxos)
 
+                    # update sendable blockchain (without genesis block)
+                    with state.blockchain_public_lock:
+                        state.blockchain_public = [b.dump_sendable() for b in state.blockchain[1:]]
+
                     # re-play the other transactions that are still waiting to enter a block
                     # If any one fails, sender is fraudulent, but oh well
                     for tx in TRANSACTIONS_BACKUP:
                         tx_json = tx.dump_sendable()
                         if tx_json not in block.transactions:
-                            status, tx = Transaction.validate_transaction(tx_json, start_miner=False)
-
-                            used_inputs += tx.inputs
-                            new_validated_ids.append(tx.id)
-
-                            for tx_id in tx.inputs:
-                                if tx_id in new_validated_ids:
-                                    new_validated_ids.remove(tx_id)
-
-                    # re-play pending transactions
-                    # if settings.HOPEFUL:
-                    #     Transaction.replay_pending_transactions(new_validated_ids, used_inputs)
-
-                    # start miner if needed
-                    if len(state.transactions) >= settings.BLOCK_CAPACITY and start_miner:
-                        miner.start()
+                            status, tx = Transaction.validate_transaction(tx_json)
 
                     return 'ok'
 
@@ -184,11 +156,6 @@ class Block(object):
                             # creates a different chain, one whose length is not larger
                             # than the one we have. we may choose whichever chain we want,
                             # we choose our own for simplicity
-
-                            # start miner if needed
-                            if len(state.transactions) >= settings.BLOCK_CAPACITY and start_miner:
-                                miner.start()
-
                             return 'dropped'
 
                     # unknown block, ask other nodes
@@ -205,19 +172,16 @@ class Block(object):
 
 
     @staticmethod
-    def create_block(transactions, nonce, sha, start_miner=True):
+    def create_block(transactions, nonce, sha):
         '''
         the miner found `nonce` for the list of `transactions`.
         create a block, append to our own blockchain and return it
         '''
         try:
+            # lock and go
             with state.lock:
                 TRANSACTIONS_BACKUP = copy.deepcopy(state.transactions)
-                PENDING_TRANSACTIONS_BACKUP = copy.deepcopy(state.pending_transactions)
                 UTXOS_BACKUP = copy.deepcopy(state.utxos)
-
-                if len(transactions) != settings.BLOCK_CAPACITY:
-                    raise Exception('invalid block capacity')
 
                 block = Block(
                     transactions=copy.deepcopy(transactions),
@@ -227,6 +191,8 @@ class Block(object):
                     index=len(state.blockchain)
                 )
 
+                if len(block.transactions) != settings.BLOCK_CAPACITY:
+                    raise Exception('invalid block capacity')
                 if block.current_hash != block.calculate_hash().hexdigest():
                     raise Exception('invalid block hash')
                 if not block.current_hash.startswith('0' * settings.DIFFICULTY):
@@ -236,59 +202,47 @@ class Block(object):
                 state.utxos = copy.deepcopy(state.valid_utxos)
                 state.transactions = []
 
-                used_inputs = []
-                new_validated_ids = []
                 for tx_json_string in transactions:
-                    status, t = Transaction.validate_transaction(tx_json_string, start_miner=False, check_pending=False)
+                    status, t = Transaction.validate_transaction(tx_json_string)
                     if status != 'added':
                         raise Exception('transaction already exists')
-
-                    new_validated_ids.append(t.id)
-                    used_inputs += t.inputs
-
-                    for tx_id in t.inputs:
-                        if tx_id in new_validated_ids:
-                            new_validated_ids.remove(tx_id)
 
                 # remove them again
                 state.transactions = []
 
-                # append to blockchain
+                # append to blockchain, update valid utxos
                 state.blockchain.append(block)
-
-                # save utxos up until this block
                 state.valid_utxos = copy.deepcopy(state.utxos)
+
+                # update sendable blockchain (without genesis block)
+                with state.blockchain_public_lock:
+                    state.blockchain_public = [b.dump_sendable() for b in state.blockchain[1:]]
 
                 # re-play transactions waiting to enter a block
                 for tx in TRANSACTIONS_BACKUP:
                     tx_json_string = tx.dump_sendable()
                     if tx_json_string not in transactions:
-                        status, t = Transaction.validate_transaction(tx_json_string, start_miner=False)
-
-                # re-play pending transactions
-                if settings.HOPEFUL:
-                    Transaction.replay_pending_transactions(new_validated_ids, used_inputs)
-
-                # re-start miner if needed
-                if start_miner and len(state.transactions) >= settings.BLOCK_CAPACITY:
-                    miner.start()
+                        status, t = Transaction.validate_transaction(tx_json_string)
 
                 return block
 
         except Exception as e:
             state.transactions = TRANSACTIONS_BACKUP
             state.utxos = UTXOS_BACKUP
-            state.pending_transactions = PENDING_TRANSACTIONS_BACKUP
             print(f'Block.create_block: {e.__class__.__name__}: {e}')
             return None
 
 
     @staticmethod
-    def create_genesis_block():
+    def create_genesis_block(count):
         '''
         creates genesis block (the only unvalidated block for the chain)
         '''
         try:
+
+            if not Transaction.create_genesis_transaction(count):
+                raise Exception('could not create genesis transaction')
+
             with state.lock:
                 block = Block(
                     transactions=[tx.dump_sendable() for tx in state.transactions],

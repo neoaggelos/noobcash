@@ -42,11 +42,17 @@ def start():
         _start(host, transactions)
 
 
+def start_if_needed():
+    if len(state.transactions) >= settings.BLOCK_CAPACITY:
+        start()
+
+
 def stop():
     try:
-        print('Killing miner: PID', state.miner_pid)
-        os.kill(state.miner_pid, SIGTERM)
-        state.miner_pid = None
+        if state.miner_pid is not None:
+            print('Killing miner: PID', state.miner_pid)
+            os.kill(state.miner_pid, SIGTERM)
+            state.miner_pid = None
     except OSError as e:
         if e.errno != os.errno.ESRCH:
             print(f'miner.stop: {e.errno}: {e}')

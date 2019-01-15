@@ -9,7 +9,7 @@ from django.views import View
 
 from noobcash.backend.transaction import Transaction
 from noobcash.backend.block import Block
-from noobcash.backend import state, keypair, multicast, settings
+from noobcash.backend import state, keypair, multicast, settings, miner
 
 ################################################################################
 
@@ -54,19 +54,17 @@ class InitAsServer(View):
             if state.pubkey:
                 return HttpResponseBadRequest()
 
+            keypair.generate_keypair()
+
             state.num_participants = count
             state.participant_id = 0
             state.utxos = { }
             state.utxos[state.pubkey] = []
 
-            keypair.generate_keypair()
             state.participants[state.pubkey] = {
                 'host': host,
                 'id': state.participant_id
             }
-
-            if not Transaction.create_genesis_transaction(count):
-                return HttpResponseServerError()
 
         return HttpResponse(state.token)
 
@@ -92,7 +90,7 @@ class ClientConnect(View):
             # all clients connected, send out 'accepted' messages
             if len(state.participants) == state.num_participants:
                 # create genesis block
-                if not Block.create_genesis_block():
+                if not Block.create_genesis_block(state.num_participants):
                     return HttpResponseBadRequest()
 
                 for p in state.participants.values():
@@ -107,6 +105,7 @@ class ClientConnect(View):
                     })
 
                 # after everyone has connected, send transactions
+                # print(json.dumps(state.participants, indent=4))
                 for pubkey in state.participants:
                     if pubkey == state.pubkey:
                         continue
@@ -117,6 +116,7 @@ class ClientConnect(View):
 
                     multicast.multicast('receive_transaction', {'transaction': res.dump_sendable()}, [p['host'] for p in state.participants.values() if p['id'] != state.participant_id])
 
+                miner.start_if_needed()
 
             return HttpResponse()
 
@@ -129,6 +129,7 @@ class ClientAccepted(View):
         genesis_block_json = request.POST.get('genesis_block')
         genesis_utxos = json.loads(request.POST.get('genesis_utxos'))
 
+        # print('accepted', request.POST)
         with state.lock:
             if len(state.participants) > 0:
                 return HttpResponseBadRequest()

@@ -3,7 +3,7 @@ from django.views import View
 
 from noobcash.backend.transaction import Transaction
 from noobcash.backend.block import Block
-from noobcash.backend import consensus
+from noobcash.backend import consensus, settings, state, miner
 
 
 class ReceiveTransaction(View):
@@ -13,7 +13,9 @@ class ReceiveTransaction(View):
     '''
     def post(self, request):
         trans_json_string = request.POST.get('transaction')
-        res, t = Transaction.validate_transaction(trans_json_string)
+        with state.lock:
+            res, t = Transaction.validate_transaction(trans_json_string)
+            miner.start_if_needed()
 
         status = 200 if res != 'error' else 400
         return HttpResponse(res, status=status)
@@ -30,19 +32,23 @@ class ReceiveBlock(View):
     '''
     def post(self, request):
         block_json_string = request.POST.get('block')
-        res = Block.validate_block(block_json_string)
 
-        if res == 'consensus':
-            print('need consensus vote')
-            res = consensus.consensus()
-            return HttpResponse(res)
+        miner.stop()
+        with state.lock:
+            res = Block.validate_block(block_json_string)
 
-        if res == 'ok':
-            print('block is ok')
-            return HttpResponse(res)
-        
-        if res == 'dropped':
-            print('dropping')
-            return HttpResponse(res)
+            if res == 'error':
+                return HttpResponseBadRequest(res)
 
-        return HttpResponseBadRequest(res)
+            if res == 'consensus':
+                print('need consensus vote')
+                res = consensus.consensus()
+
+            if res == 'ok':
+                print('block is ok')
+
+            if res == 'dropped':
+                print('dropping')
+
+            miner.start_if_needed()
+            return HttpResponse(res)

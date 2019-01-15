@@ -1,5 +1,5 @@
 from noobcash.backend import state
-from noobcash.backend.block import Block
+from noobcash.backend.block import Block, Transaction
 
 import json
 import copy
@@ -16,6 +16,7 @@ def validate_chain(blockchain, pending):
         # restart from genesis block
         state.blockchain = [state.genesis_block]
         state.utxos = copy.deepcopy(state.genesis_utxos)
+        state.valid_utxos = copy.deepcopy(state.genesis_utxos)
 
         state.transactions = []
 
@@ -25,16 +26,14 @@ def validate_chain(blockchain, pending):
         for block in blockchain:
             # `Block.validate_block()` will also update any pending transactions
             # with conflicting inputs
-            print(json.loads(block)['transactions'])
-            res = Block.validate_block(block, start_miner=False)
-
+            res = Block.validate_block(block)
             if res != 'ok':
                 return False
 
         # play transactions over
         for tx in pending:
             tx_json = tx.dump_sendable()
-            Transaction.validate_transaction(tx_json, start_miner=False)
+            Transaction.validate_transaction(tx_json)
 
         return True
 
@@ -46,6 +45,7 @@ def consensus():
         MAX_BLOCKCHAIN = copy.deepcopy(state.blockchain)
         MAX_TRANSACTIONS = copy.deepcopy(state.transactions)
         MAX_UTXOS = copy.deepcopy(state.utxos)
+        MAX_VALID_UTXOS = copy.deepcopy(state.valid_utxos)
         MAX_LENGTH = len(MAX_BLOCKCHAIN)
         TRANSACTIONS_BACKUP = copy.deepcopy(state.transactions)
 
@@ -69,6 +69,7 @@ def consensus():
                 # that the received chain size is actually `len(received_blockchain) + 1`
                 # We want to keep chains with length > MAX_LENGTH
                 if len(received_blockchain) < MAX_LENGTH:
+                    print(f'consensus.{pid}: Ignoring shorter blockchain {len(received_blockchain)}')
                     continue
 
                 if not validate_chain(received_blockchain, TRANSACTIONS_BACKUP):
@@ -78,6 +79,7 @@ def consensus():
                 MAX_BLOCKCHAIN = copy.deepcopy(state.blockchain)
                 MAX_TRANSACTIONS = copy.deepcopy(state.transactions)
                 MAX_UTXOS = copy.deepcopy(state.utxos)
+                MAX_VALID_UTXOS = copy.deepcopy(state.valid_utxos)
                 MAX_LENGTH = len(MAX_BLOCKCHAIN)
 
             except Exception as e:
@@ -87,4 +89,4 @@ def consensus():
         state.blockchain = MAX_BLOCKCHAIN
         state.transactions = MAX_TRANSACTIONS
         state.utxos = MAX_UTXOS
-
+        state.valid_utxos = MAX_VALID_UTXOS
