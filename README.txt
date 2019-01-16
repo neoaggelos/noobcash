@@ -49,3 +49,32 @@ $ cd noobcash
 $ source .venv/bin/activate
 $ python client.py [host] [port] -n NUM_PARTICIPANTS (for the coordinator)
 $ python client.py [host] [port] (for participants)
+
+
+================================================================================
+COMMANDS
+================================================================================
+
+Commands are given via the client.
+
+help_message = '''
+Usage:
+
+$ client.py HOST PORT           Start as participant
+$ client.py HOST PORT -n N      Start as coordinator, for N participants
+
+Available commands:
+
+* `t [recepient_id] [amount]`   Send `amount` NBC to `recepient`
+* `source [fname]`              Read and send transactions from `fname`
+* `view`                        View transactions of the latest block
+* `balance`                     View balance of each wallet (as of last validated block)
+* `help`                        Print this help message
+* `exit`                        Exit client (will not stop server)
+
+
+Extra commands:
+
+* `view_all`                    View transactions of all validated blocks so far
+* `latest_balance`              View balance of each wallet (as of last received transaction)
+'''

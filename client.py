@@ -36,6 +36,7 @@ $ client.py HOST PORT -n N      Start as coordinator, for N participants
 Available commands:
 
 * `t [recepient_id] [amount]`   Send `amount` NBC to `recepient`
+* `source [fname]`              Read and send transactions from `fname`
 * `view`                        View transactions of the latest block
 * `balance`                     View balance of each wallet (as of last validated block)
 * `help`                        Print this help message
