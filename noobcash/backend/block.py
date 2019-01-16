@@ -105,6 +105,7 @@ class Block(object):
                 TRANSACTIONS_BACKUP = copy.deepcopy(state.transactions)
                 UTXOS_BACKUP = copy.deepcopy(state.utxos)
                 BLOCKCHAIN_BACKUP = copy.deepcopy(state.blockchain)
+                VALID_UTXOS_BACKUP = copy.deepcopy(state.valid_utxos)
 
                 prev_block = state.blockchain[-1]
                 block = Block(**json.loads(json_string), index=prev_block.index+1)
@@ -166,6 +167,7 @@ class Block(object):
                 state.transactions = TRANSACTIONS_BACKUP
                 state.blockchain = BLOCKCHAIN_BACKUP
                 state.utxos = UTXOS_BACKUP
+                state.valid_utxos = VALID_UTXOS_BACKUP
 
                 print(f'Block.validate_block: {e.__class__.__name__}: {e}')
                 return 'error'
@@ -182,6 +184,7 @@ class Block(object):
             with state.lock:
                 TRANSACTIONS_BACKUP = copy.deepcopy(state.transactions)
                 UTXOS_BACKUP = copy.deepcopy(state.utxos)
+                VALID_UTXOS_BACKUP = copy.deepcopy(state.valid_utxos)
 
                 block = Block(
                     transactions=copy.deepcopy(transactions),
@@ -229,6 +232,7 @@ class Block(object):
         except Exception as e:
             state.transactions = TRANSACTIONS_BACKUP
             state.utxos = UTXOS_BACKUP
+            state.valid_utxos = VALID_UTXOS_BACKUP
             print(f'Block.create_block: {e.__class__.__name__}: {e}')
             return None
 
