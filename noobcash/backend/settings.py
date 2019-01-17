@@ -1,8 +1,8 @@
 ## capacity of blocks
-BLOCK_CAPACITY = 4
+BLOCK_CAPACITY = 10
 
 ## difficulty
-DIFFICULTY = 4
+DIFFICULTY = 5
 
 ## coordinator host and port
 COORDINATOR_PORT = 8000
