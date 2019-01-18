@@ -190,3 +190,11 @@ class GetAllTransactions(View):
             #     })
 
         return JsonResponse({'blocks': blocks})
+
+class GetTotalBlocksCreated(View):
+    '''
+    Return how many blocks this node has created (including the ones dropped by consensus)
+    '''
+    def post(self, request):
+        with state.lock:
+            return JsonResponse({'num_blocks': state.num_blocks_created})

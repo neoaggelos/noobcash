@@ -227,6 +227,9 @@ class Block(object):
                     if tx_json_string not in transactions:
                         status, t = Transaction.validate_transaction(tx_json_string)
 
+                # plus one
+                state.num_blocks_created += 1
+
                 return block
 
         except Exception as e:

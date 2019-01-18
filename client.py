@@ -154,6 +154,16 @@ while True:
         except Exception as e:
             print(f'error: {e.__class__.__name__}: {e}')
 
+    elif cmd == 'num_blocks':
+        API = f'{HOST}/get_num_blocks_created/'
+        response = requests.post(API)
+
+        if response.status_code == 200:
+            print('Created', response.json()['num_blocks'], 'blocks in total')
+        else:
+            print('Error')
+
+
     elif cmd == 'help':
         print(help_message)
 

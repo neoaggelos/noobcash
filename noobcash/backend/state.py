@@ -47,3 +47,6 @@ genesis_utxos = []
 # Sendable version of the blockchain
 blockchain_public = []
 blockchain_public_lock = RLock()
+
+# Used for statistics
+num_blocks_created = 0
