@@ -7,7 +7,7 @@ def broadcast(api: str, message: dict, wait=False):
     '''hit `{host}/{api}/` of all hosts, with data `message`'''
 
     kwargs = {}
-    if wait:
+    if not wait:
         kwargs['timeout'] = 0.001
 
     for h in state.other_hosts:
@@ -19,7 +19,7 @@ def broadcast(api: str, message: dict, wait=False):
                 print(f'broadcast: Request "{h}/{api}" failed')
 
         except requests.exceptions.Timeout:
-            # print('broadcast: Request "{h}/{api}" timed out')
+            print(F'broadcast: Request "{h}/{api}" timed out')
             pass
 
 
