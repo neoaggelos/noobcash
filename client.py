@@ -156,13 +156,21 @@ while True:
 
     elif cmd == 'num_blocks':
         API = f'{HOST}/get_num_blocks_created/'
-        response = requests.post(API)
+        response = requests.get(API)
 
         if response.status_code == 200:
             print('Created', response.json()['num_blocks'], 'blocks in total')
         else:
             print('Error')
 
+    elif cmd == 'num_pending':
+        API = f'{HOST}/get_num_pending_transactions/'
+        response = requests.get(API)
+
+        if response.status_code == 200:
+            print(response.json()['num_pending'], 'pending transactions')
+        else:
+            print('Error')
 
     elif cmd == 'help':
         print(help_message)

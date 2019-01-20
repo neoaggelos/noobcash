@@ -31,6 +31,8 @@ urlpatterns = [
     path('get_transactions/', GetTransactions.as_view()),
     path('get_transactions_all/', GetAllTransactions.as_view()),
     path('get_num_blocks_created/', GetTotalBlocksCreated.as_view()),
+    path('get_num_pending_transactions/', GetNumPendingTransactions.as_view()),
+    path('get_pending_transactions/', GetPendingTransactions.as_view()),
 
     # receive
     path('receive_transaction/', ReceiveTransaction.as_view()),

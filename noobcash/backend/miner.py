@@ -43,8 +43,15 @@ def start():
 
 
 def start_if_needed():
+    '''
+    starts miner if there are BLOCK_CAPACITY pending transactions
+    returns True if miner was started
+    '''
     if len(state.transactions) >= settings.BLOCK_CAPACITY:
         start()
+        return True
+    else:
+        return False
 
 
 def stop():

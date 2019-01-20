@@ -195,6 +195,22 @@ class GetTotalBlocksCreated(View):
     '''
     Return how many blocks this node has created (including the ones dropped by consensus)
     '''
-    def post(self, request):
+    def get(self, request):
         with state.lock:
             return JsonResponse({'num_blocks': state.num_blocks_created})
+
+class GetNumPendingTransactions(View):
+    '''
+    Return how many pending transactions have not yet been mined
+    '''
+    def get(self, request):
+        with state.lock:
+            return JsonResponse({'num_pending': len(state.transactions)})
+
+class GetPendingTransactions(View):
+    '''
+    Return list of pending transactions
+    '''
+    def get(self, request):
+        with state.lock:
+            return JsonResponse({'transactions': json.dumps([tx.dump_sendable() for tx in state.transactions])})

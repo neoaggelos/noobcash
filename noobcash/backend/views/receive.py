@@ -1,3 +1,6 @@
+import requests
+import json
+
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.views import View
 
@@ -34,6 +37,7 @@ class ReceiveBlock(View):
         block_json_string = request.POST.get('block')
 
         miner.stop()
+        keep_begging = False
         with state.lock:
             res = Block.validate_block(block_json_string)
 
@@ -50,5 +54,33 @@ class ReceiveBlock(View):
             if res == 'dropped':
                 print('dropping')
 
-            miner.start_if_needed()
-            return HttpResponse(res)
+            keep_begging = not miner.start_if_needed()
+
+        # DISCUSS: also do this when creating blocks?
+        # not the brightest idea
+        for h in state.other_hosts:
+            if not keep_begging:
+                break
+
+            # we validated a block and now we have very few transactions
+            # hard-working beggars have no shame
+            print(f'receive_block/: begging {h} for transactions')
+            try:
+                response = requests.get(f'{h}/get_pending_transactions/')
+                if response.status_code != 200:
+                    raise Exception('begging failed')
+
+                new_transactions = json.loads(response.json()['transactions'])
+
+                with state.lock:
+                    for tx_json in new_transactions:
+                        res, t = Transaction.validate_transaction(tx_json)
+
+                    keep_begging = not miner.start_if_needed()
+            except Exception as e:
+                print(f'receive_block/: {e.__class__.__name__}: {e}')
+
+        if keep_begging:
+            print(f'receive_block/: asked around, no one else has enough transactions')
+
+        return HttpResponse(res)
