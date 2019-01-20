@@ -17,6 +17,9 @@ transactions = []
 # List of participants `participants[pubkey] = {host, id}`
 participants = {}
 
+# List of other hosts, cached for speed (broadcast)
+other_hosts = []
+
 # Number of participants
 num_participants = -1
 

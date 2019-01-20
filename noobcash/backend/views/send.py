@@ -5,12 +5,12 @@ from django.views import View
 
 from noobcash.backend.transaction import Transaction
 from noobcash.backend.block import Block
-from noobcash.backend import multicast, state, miner
+from noobcash.backend import broadcast, state, miner
 
 
 class CreateAndSendTransaction(View):
     '''
-    Create a transaction and multicast to all participants.
+    Create a transaction and broadcast to all participants.
     '''
     def post(self, request):
         recepient = request.POST.get('recepient')
@@ -25,7 +25,7 @@ class CreateAndSendTransaction(View):
             if res is None:
                 return HttpResponseBadRequest('invalid transaction')
 
-        multicast.multicast('receive_transaction', {'transaction': res.dump_sendable()}, [p['host'] for p in state.participants.values() if p['id'] != state.participant_id])
+        broadcast.broadcast('receive_transaction', {'transaction': res.dump_sendable()})
 
         miner.start_if_needed()
 
@@ -35,7 +35,7 @@ class CreateAndSendTransaction(View):
 class CreateAndSendBlock(View):
     '''
     The miner uses this view to notify server that a correct nonce was found
-    The participant creates the block, appends to their own blockchain and multicasts
+    The participant creates the block, appends to their own blockchain and broadcasts
 
     `create_block` will also make sure that the nonce is indeed correct
     '''
@@ -58,7 +58,7 @@ class CreateAndSendBlock(View):
             if res is None:
                 return HttpResponseBadRequest()
 
-        multicast.multicast('receive_block', {'block': res.dump_sendable()}, [p['host'] for p in state.participants.values() if p['id'] != state.participant_id])
+        broadcast.broadcast('receive_block', {'block': res.dump_sendable()})
 
         return HttpResponse()
 

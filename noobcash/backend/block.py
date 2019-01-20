@@ -82,9 +82,11 @@ class Block(object):
 
 
     @staticmethod
-    def validate_block(json_string):
+    def validate_block(json_string, update_public=True):
         '''
-        validate incoming block.
+        validate incoming block. if @update_public is False, then public blockchain is not updated.
+        this is so that the consensus algorithm (which calls validate_block a handful of times) runs
+        faster.
 
         @return
         * 'οκ'        <-- everything went ok, block was added in the blockchain (along with any new transactions)
@@ -138,8 +140,9 @@ class Block(object):
                     state.valid_utxos = copy.deepcopy(state.utxos)
 
                     # update sendable blockchain (without genesis block)
-                    with state.blockchain_public_lock:
-                        state.blockchain_public = [b.dump_sendable() for b in state.blockchain[1:]]
+                    if update_public:
+                        with state.blockchain_public_lock:
+                            state.blockchain_public.append(block.dump_sendable())
 
                     # re-play the other transactions that are still waiting to enter a block
                     # If any one fails, sender is fraudulent, but oh well
@@ -219,7 +222,7 @@ class Block(object):
 
                 # update sendable blockchain (without genesis block)
                 with state.blockchain_public_lock:
-                    state.blockchain_public = [b.dump_sendable() for b in state.blockchain[1:]]
+                    state.blockchain_public.append(block.dump_sendable())
 
                 # re-play transactions waiting to enter a block
                 for tx in TRANSACTIONS_BACKUP:

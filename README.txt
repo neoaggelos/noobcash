@@ -27,7 +27,7 @@ Edit `noobcash/backend/settings.py` to configure settings:
     * DIFFICULTY        <-- mining difficulty
     * COORDINATOR_HOST  <-- well-known address of coordinator
 
-Usage (start server):
+Usage (start a server for each participant):
     $ cd noobcash
     $ source .venv/bin/activate
     $ python manage.py runserver [port]
@@ -159,7 +159,7 @@ SOURCE CODE
     transaction.py      Defines `Transaction` class
     keypair.py          Generates public and private RSA keys
     consensus.py        The algorithm run to achieve consensus
-    multicast.py        Send a message to every participant
+    broadcast.py        Send a message to every participant
     miner.py            Implementation of the miner
 
 ./noobcash/backend/views

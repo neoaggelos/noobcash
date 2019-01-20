@@ -9,7 +9,7 @@ from django.views import View
 
 from noobcash.backend.transaction import Transaction
 from noobcash.backend.block import Block
-from noobcash.backend import state, keypair, multicast, settings, miner
+from noobcash.backend import state, keypair, broadcast, settings, miner
 
 ################################################################################
 
@@ -89,6 +89,10 @@ class ClientConnect(View):
 
             # all clients connected, send out 'accepted' messages
             if len(state.participants) == state.num_participants:
+
+                # cache list of other hosts
+                state.other_hosts = [p['host'] for p in state.participants.values() if p['id'] != state.participant_id]
+
                 # create genesis block
                 if not Block.create_genesis_block(state.num_participants):
                     return HttpResponseBadRequest()
@@ -114,7 +118,7 @@ class ClientConnect(View):
                     if not res:
                         return HttpResponseServerError()
 
-                    multicast.multicast('receive_transaction', {'transaction': res.dump_sendable()}, [p['host'] for p in state.participants.values() if p['id'] != state.participant_id])
+                    broadcast.broadcast('receive_transaction', {'transaction': res.dump_sendable()}, wait=True)
 
                 miner.start_if_needed()
 
@@ -137,6 +141,9 @@ class ClientAccepted(View):
             state.participant_id = participant_id
             state.participants = participants
             state.num_participants = len(state.participants)
+
+            # cache list of other hosts
+            state.other_hosts = [p['host'] for p in state.participants.values() if p['id'] != state.participant_id]
 
             # initial blockchain contains genesis block
             # DISCUSS: we just `logged in`, do we trust him or should we check
