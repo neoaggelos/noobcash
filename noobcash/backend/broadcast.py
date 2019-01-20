@@ -19,7 +19,7 @@ def broadcast(api: str, message: dict, wait=False):
                 print(f'broadcast: Request "{h}/{api}" failed')
 
         except requests.exceptions.Timeout:
-            print(F'broadcast: Request "{h}/{api}" timed out')
+            print(f'broadcast: Request "{h}/{api}" timed out')
             pass
 
 
