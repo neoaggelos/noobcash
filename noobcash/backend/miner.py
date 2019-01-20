@@ -96,7 +96,9 @@ def do_mine(host, transactions_json, token):
 
     # try coming up with random numbers until hash is good
     seed()
-    nonce = randint(0, 4294967295)  # compute a random 32-bit value
+
+    # compute a random 32-bit value, hopefully different for different participants
+    nonce = (randint(0, 4294967295) * state.participant_id) % 4294967295
     while True:
         base['nonce'] = nonce
 
