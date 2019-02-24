@@ -26,6 +26,7 @@ urlpatterns = [
 
     # get information
     path('get_blockchain/', GetBlockchain.as_view()),
+    path('get_blockchain_length/', GetBlockchainLength.as_view()),
     path('get_balance/', GetBalance.as_view()),
     path('get_balance_latest/', GetLatestBalance.as_view()),
     path('get_transactions/', GetTransactions.as_view()),

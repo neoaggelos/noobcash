@@ -75,6 +75,18 @@ class GetBlockchain(View):
             })
 
 
+class GetBlockchainLength(View):
+    '''
+    Return current blockchain length
+    '''
+    def get(self, request):
+        with state.blockchain_public_lock:
+            # DISCUSS: we do not include the genesis block
+            return JsonResponse({
+                'blockchain_length': len(state.blockchain_public)
+            })
+
+
 class GetBalance(View):
     '''
     Return current wallet amount for each participant,
