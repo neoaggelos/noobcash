@@ -12,6 +12,6 @@ setup(
     url='https://github.com/neoaggelos/noobcash',
     author='Aggelos Kolaitis',
     install_requires=[
-        'Django',
+        'Django', 'pycrypto', 'requests'
     ]
 )

@@ -8,7 +8,7 @@ def broadcast(api: str, message: dict, wait=False):
 
     kwargs = {}
     if not wait:
-        kwargs['timeout'] = 0.001
+        kwargs['timeout'] = 1
 
     for h in state.other_hosts:
         try:

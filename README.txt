@@ -20,7 +20,7 @@ Setup:
     $ cd noobcash
     $ virtualenv .venv
     $ source .venv/bin/activate
-    $ pip install .
+    $ pip install -e .
 
 Edit `noobcash/backend/settings.py` to configure settings:
     * BLOCK_CAPACITY    <-- number of transactions of each block
