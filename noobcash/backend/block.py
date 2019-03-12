@@ -59,6 +59,7 @@ class Block(object):
             previous_hash=self.previous_hash
         ), sort_keys=True)
 
+
     def dict(self):
         return dict(
             timestamp=self.timestamp,
@@ -72,7 +73,8 @@ class Block(object):
         ''' used for calculating hash '''
         return json.dumps(dict(
             transactions=self.transactions,
-            nonce=self.nonce
+            nonce=self.nonce,
+            timestamp=self.timestamp
         ), sort_keys=True)
 
 
@@ -177,7 +179,7 @@ class Block(object):
 
 
     @staticmethod
-    def create_block(transactions, nonce, sha):
+    def create_block(transactions, nonce, sha, timestamp):
         '''
         the miner found `nonce` for the list of `transactions`.
         create a block, append to our own blockchain and return it
@@ -194,7 +196,8 @@ class Block(object):
                     nonce=nonce,
                     current_hash=sha,
                     previous_hash=state.blockchain[-1].current_hash,
-                    index=len(state.blockchain)
+                    index=len(state.blockchain),
+                    timestamp=timestamp
                 )
 
                 if len(block.transactions) != settings.BLOCK_CAPACITY:

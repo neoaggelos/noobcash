@@ -44,6 +44,7 @@ class CreateAndSendBlock(View):
         nonce = int(request.POST.get('nonce'))
         sha = request.POST.get('sha')
         token = request.POST.get('token')
+        timestamp = request.POST.get('timestamp')
 
         if token != state.token:
             return HttpResponseBadRequest('invalid token')
@@ -52,7 +53,7 @@ class CreateAndSendBlock(View):
 
         # FIXME: start miner after sending?
         with state.lock:
-            res = Block.create_block(transactions, nonce, sha)
+            res = Block.create_block(transactions, nonce, sha, timestamp)
             miner.start_if_needed()
 
             if res is None:

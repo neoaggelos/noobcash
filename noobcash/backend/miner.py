@@ -69,7 +69,7 @@ def stop():
 
 ###############################################################################
 
-def announce_nonce(host, transactions_json, nonce, sha, token):
+def announce_nonce(host, transactions_json, nonce, sha, token, timestamp):
     # NOTE: miner is a fragile process, it may get killed at any point
     # dont start sending blocks around, if we die midway its gonna get bad
     # just tell dad and exit, let him worry about sending crap around
@@ -80,7 +80,8 @@ def announce_nonce(host, transactions_json, nonce, sha, token):
         'transactions': transactions_json,
         'sha': sha,
         'nonce': nonce,
-        'token': token
+        'token': token,
+        'timestamp': timestamp
     })
 
     if response.status_code != 200:
@@ -108,13 +109,14 @@ def do_mine(host, transactions_json, token):
     nonce = (randint(0, 4294967295) * state.participant_id) % 4294967295
     while True:
         base['nonce'] = nonce
+        base['timestamp'] = timestamp = str(datetime.datetime.now())
 
         base_json_string = json.dumps(base, sort_keys=True)
         sha = SHA384.new(base_json_string.encode()).hexdigest()
 
         # got it, tell everyone
         if sha.startswith('0' * settings.DIFFICULTY):
-            announce_nonce(host, transactions_json, nonce, sha, token)
+            announce_nonce(host, transactions_json, nonce, sha, token, timestamp)
             exit(0)
 
         # DISCUSS
