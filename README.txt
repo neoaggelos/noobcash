@@ -3,7 +3,7 @@ NOOBCASH
 ================================================================================
 
 A simple blockchain system for validating transactions using Proof of work.
-Created for the `Distributed Systems` course of NTUA ECE.
+Created for my NTUA ECE Distributed Systems 2018-2019 course.
 
 ~ Aggelos Kolaitis
 
@@ -147,6 +147,7 @@ SOURCE CODE
 ./
     manage.py           Used to run the django server
     client.py           Client, sends requests to server
+    check_progress.py   A (too) simple noobcash network observer
 
 ./noobcash/
     urls.py             Endpoints for server
